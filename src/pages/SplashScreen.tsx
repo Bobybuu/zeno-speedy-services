@@ -34,7 +34,7 @@ const SplashScreen = () => {
           className="inline-flex items-center gap-2 px-6 py-3 bg-secondary rounded-full"
         >
           <span className="text-2xl font-bold text-white">⚡</span>
-          <span className="text-xl font-bold text-white speed-7">Speed 7</span>
+          <span className="text-xl font-bold text-white speed-7">Speed</span>
         </motion.div>
       </motion.div>
       
