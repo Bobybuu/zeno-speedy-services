@@ -12,6 +12,7 @@ import RoadsideServices from "./pages/RoadsideServices";
 import OxygenServices from "./pages/OxygenServices";
 import NotFound from "./pages/NotFound";
 import Account from "./pages/Account";
+import GasProviderDetail from "./pages/GasProviderDetail";
 
 const queryClient = new QueryClient();
 
@@ -27,6 +28,7 @@ const App = () => (
           <Route path="/register" element={<Register />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/services/gas" element={<GasServices />} />
+          <Route path="/services/gas/:id" element={<GasProviderDetail />} />
           <Route path="/services/roadside" element={<RoadsideServices />} />
           <Route path="/services/oxygen" element={<OxygenServices />} />
           <Route path="/account" element={<Account />} />
