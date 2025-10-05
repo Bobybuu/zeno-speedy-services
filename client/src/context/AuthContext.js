@@ -22,17 +22,26 @@ export const AuthProvider = ({ children }) => {
   const checkAuthentication = async () => {
     try {
       const token = localStorage.getItem('access_token');
-      if (token) {
+      const storedUser = localStorage.getItem('user');
+      
+      if (token && storedUser) {
+        // Set user from localStorage immediately for better UX
+        setCurrentUser(JSON.parse(storedUser));
+        
+        // Then verify with backend
         const response = await authAPI.checkAuth();
         if (response.data.authenticated) {
           setCurrentUser(response.data.user);
+          localStorage.setItem('user', JSON.stringify(response.data.user));
         }
       }
     } catch (error) {
-      console.log('Not authenticated');
+      console.log('Authentication check failed:', error);
+      // Clear invalid tokens
       localStorage.removeItem('access_token');
       localStorage.removeItem('refresh_token');
       localStorage.removeItem('user');
+      setCurrentUser(null);
     } finally {
       setLoading(false);
     }
@@ -54,9 +63,10 @@ export const AuthProvider = ({ children }) => {
         return { success: true, data: response.data };
       }
     } catch (error) {
+      console.error('Login error:', error);
       return { 
         success: false, 
-        error: error.response?.data || 'Login failed' 
+        error: error.response?.data || { message: 'Login failed' } 
       };
     }
   };
@@ -73,6 +83,7 @@ export const AuthProvider = ({ children }) => {
           // Store tokens temporarily for OTP verification
           localStorage.setItem('temp_access_token', access);
           localStorage.setItem('temp_refresh_token', refresh);
+          localStorage.setItem('temp_user', JSON.stringify(user));
         } else {
           // No OTP required, complete registration
           localStorage.setItem('access_token', access);
@@ -88,9 +99,10 @@ export const AuthProvider = ({ children }) => {
         };
       }
     } catch (error) {
+      console.error('Registration error:', error);
       return { 
         success: false, 
-        error: error.response?.data || 'Registration failed' 
+        error: error.response?.data || { message: 'Registration failed' } 
       };
     }
   };
@@ -104,6 +116,7 @@ export const AuthProvider = ({ children }) => {
         // Replace temporary tokens with permanent ones
         localStorage.removeItem('temp_access_token');
         localStorage.removeItem('temp_refresh_token');
+        localStorage.removeItem('temp_user');
         localStorage.setItem('access_token', access);
         localStorage.setItem('refresh_token', refresh);
         localStorage.setItem('user', JSON.stringify(user));
@@ -115,9 +128,10 @@ export const AuthProvider = ({ children }) => {
         return { success: true, data: response.data };
       }
     } catch (error) {
+      console.error('OTP verification error:', error);
       return { 
         success: false, 
-        error: error.response?.data || 'OTP verification failed' 
+        error: error.response?.data || { message: 'OTP verification failed' } 
       };
     }
   };
@@ -127,22 +141,37 @@ export const AuthProvider = ({ children }) => {
       const response = await authAPI.resendOTP({ email });
       return { success: true, data: response.data };
     } catch (error) {
+      console.error('Resend OTP error:', error);
       return { 
         success: false, 
-        error: error.response?.data || 'Failed to resend OTP' 
+        error: error.response?.data || { message: 'Failed to resend OTP' } 
       };
     }
   };
 
-  const logout = () => {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-    localStorage.removeItem('user');
-    localStorage.removeItem('temp_access_token');
-    localStorage.removeItem('temp_refresh_token');
-    setCurrentUser(null);
-    setRequiresOTP(false);
-    setPendingUser(null);
+  const logout = async () => {
+    try {
+      // Call backend logout if needed (optional)
+      // await authAPI.logout();
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      // Always clear local storage
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+      localStorage.removeItem('user');
+      localStorage.removeItem('temp_access_token');
+      localStorage.removeItem('temp_refresh_token');
+      localStorage.removeItem('temp_user');
+      setCurrentUser(null);
+      setRequiresOTP(false);
+      setPendingUser(null);
+    }
+  };
+
+  const updateUser = (userData) => {
+    setCurrentUser(prev => ({ ...prev, ...userData }));
+    localStorage.setItem('user', JSON.stringify({ ...currentUser, ...userData }));
   };
 
   const value = {
@@ -154,6 +183,8 @@ export const AuthProvider = ({ children }) => {
     verifyOTP,
     resendOTP,
     logout,
+    checkAuthentication,
+    updateUser,
   };
 
   return (
