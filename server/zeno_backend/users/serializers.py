@@ -14,7 +14,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         fields = ('id', 'email', 'username', 'password', 'password_confirm', 
                  'user_type', 'phone_number', 'location', 'first_name', 'last_name')
         extra_kwargs = {
-            'email': {'required': True},
+            'phone_number': {'required': True},
             'username': {'required': True},
         }
 
@@ -22,15 +22,27 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         if attrs['password'] != attrs['password_confirm']:
             raise serializers.ValidationError({"password": "Password fields didn't match."})
         
-        if User.objects.filter(email=attrs['email']).exists():
+        # Validate phone number uniqueness
+        phone_number = attrs.get('phone_number')
+        if phone_number and User.objects.filter(phone_number=phone_number).exists():
+            raise serializers.ValidationError({"phone_number": "A user with this phone number already exists."})
+        
+        # Email is optional now, but if provided, check uniqueness
+        email = attrs.get('email')
+        if email and User.objects.filter(email=email).exists():
             raise serializers.ValidationError({"email": "A user with this email already exists."})
         
         return attrs
 
     def create(self, validated_data):
         validated_data.pop('password_confirm')
+        
+        # Generate username from phone number if not provided
+        if not validated_data.get('username'):
+            validated_data['username'] = validated_data['phone_number']
+        
         user = User.objects.create_user(
-            email=validated_data['email'],
+            email=validated_data.get('email', ''),
             username=validated_data['username'],
             password=validated_data['password'],
             user_type=validated_data.get('user_type', 'customer'),
@@ -40,7 +52,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             last_name=validated_data.get('last_name', ''),
         )
         
-        # Generate and send OTP
+        # Generate and send OTP to phone number
         if user.phone_number:
             otp = user.generate_otp()
             otp_service = get_otp_service()
@@ -49,34 +61,40 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         return user
 
 class UserLoginSerializer(serializers.Serializer):
-    email = serializers.EmailField()
+    phone_number = serializers.CharField()
     password = serializers.CharField()
 
     def validate(self, data):
-        email = data.get('email')
+        phone_number = data.get('phone_number')
         password = data.get('password')
         
-        if email and password:
-            user = authenticate(username=email, password=password)
-            if user:
-                if user.is_active:
-                    data['user'] = user
+        if phone_number and password:
+            # Find user by phone number
+            try:
+                user = User.objects.get(phone_number=phone_number)
+                # Authenticate using username (which is the phone number in our case)
+                user = authenticate(username=user.username, password=password)
+                if user:
+                    if user.is_active:
+                        data['user'] = user
+                    else:
+                        raise serializers.ValidationError('User account is disabled.')
                 else:
-                    raise serializers.ValidationError('User account is disabled.')
-            else:
+                    raise serializers.ValidationError('Unable to login with provided credentials.')
+            except User.DoesNotExist:
                 raise serializers.ValidationError('Unable to login with provided credentials.')
         else:
-            raise serializers.ValidationError('Must include email and password.')
+            raise serializers.ValidationError('Must include phone number and password.')
         
         return data
 
 class VerifyOTPSerializer(serializers.Serializer):
     otp = serializers.CharField(max_length=6, min_length=6)
-    email = serializers.EmailField()
+    phone_number = serializers.CharField()
 
     def validate(self, data):
         try:
-            user = User.objects.get(email=data['email'])
+            user = User.objects.get(phone_number=data['phone_number'])
             if not user.verify_otp(data['otp']):
                 raise serializers.ValidationError('Invalid or expired OTP.')
             data['user'] = user
@@ -86,11 +104,11 @@ class VerifyOTPSerializer(serializers.Serializer):
         return data
 
 class ResendOTPSerializer(serializers.Serializer):
-    email = serializers.EmailField()
+    phone_number = serializers.CharField()
 
     def validate(self, data):
         try:
-            user = User.objects.get(email=data['email'])
+            user = User.objects.get(phone_number=data['phone_number'])
             data['user'] = user
         except User.DoesNotExist:
             raise serializers.ValidationError('User not found.')
@@ -104,9 +122,36 @@ class UserProfileSerializer(serializers.ModelSerializer):
                  'location', 'first_name', 'last_name', 'profile_picture', 
                  'is_verified', 'phone_verified', 'date_joined')
         read_only_fields = ('id', 'email', 'date_joined')
-        
+
 class UserUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ('username', 'first_name', 'last_name', 'phone_number', 'location', 'profile_picture')
         read_only_fields = ('email', 'user_type', 'is_verified', 'phone_verified', 'date_joined')
+
+class ChangePasswordSerializer(serializers.Serializer):
+    old_password = serializers.CharField(required=True)
+    new_password1 = serializers.CharField(required=True, min_length=6)
+    new_password2 = serializers.CharField(required=True, min_length=6)
+
+    def validate(self, data):
+        if data['new_password1'] != data['new_password2']:
+            raise serializers.ValidationError("New passwords don't match")
+        return data
+
+class ForgotPasswordSerializer(serializers.Serializer):
+    phone_number = serializers.CharField(required=True)
+
+class VerifyResetCodeSerializer(serializers.Serializer):
+    phone_number = serializers.CharField(required=True)
+    reset_code = serializers.CharField(required=True, min_length=6, max_length=6)
+
+class ResetPasswordSerializer(serializers.Serializer):
+    reset_token = serializers.CharField(required=True)
+    new_password = serializers.CharField(required=True, min_length=6)
+    confirm_password = serializers.CharField(required=True, min_length=6)
+
+    def validate(self, data):
+        if data['new_password'] != data['confirm_password']:
+            raise serializers.ValidationError("Passwords don't match")
+        return data

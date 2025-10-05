@@ -3,8 +3,8 @@ import { useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Phone, Lock, User, ChevronRight, Mail, Shield } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Phone, Lock, User, ChevronRight, Shield } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
@@ -14,8 +14,6 @@ const Register = () => {
   const { register, verifyOTP, resendOTP, requiresOTP, pendingUser } = useAuth();
   
   const [formData, setFormData] = useState({
-    email: "",
-    username: "",
     firstName: "",
     lastName: "",
     phoneNumber: "",
@@ -31,6 +29,13 @@ const Register = () => {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Validate phone number format
+    const phoneRegex = /^\+?[\d\s-()]{10,}$/;
+    if (!phoneRegex.test(formData.phoneNumber)) {
+      toast.error("Please enter a valid phone number with country code");
+      return;
+    }
+
     if (formData.password !== formData.confirmPassword) {
       toast.error("Passwords don't match");
       return;
@@ -45,13 +50,14 @@ const Register = () => {
 
     try {
       const registrationData = {
-        email: formData.email,
-        username: formData.username,
+        // Email is now optional - using phone number as primary identifier
+        email: "", // Optional field
+        username: formData.phoneNumber, // Use phone number as username
         password: formData.password,
         password_confirm: formData.confirmPassword,
         user_type: formData.userType,
         phone_number: formData.phoneNumber,
-        location: "", // You can add location input if needed
+        location: "",
         first_name: formData.firstName,
         last_name: formData.lastName
       };
@@ -66,7 +72,14 @@ const Register = () => {
           navigate("/dashboard");
         }
       } else {
-        toast.error(result.error?.message || "Registration failed");
+        // Handle specific error cases
+        if (result.error?.phone_number) {
+          toast.error(result.error.phone_number[0]);
+        } else if (result.error?.username) {
+          toast.error(result.error.username[0]);
+        } else {
+          toast.error(result.error?.message || "Registration failed");
+        }
       }
     } catch (error) {
       toast.error("An unexpected error occurred");
@@ -86,7 +99,7 @@ const Register = () => {
     setIsLoading(true);
 
     try {
-      const result = await verifyOTP(pendingUser?.email || formData.email, otp);
+      const result = await verifyOTP(pendingUser?.phone_number || formData.phoneNumber, otp);
       
       if (result.success) {
         toast.success("Phone number verified successfully!");
@@ -105,7 +118,7 @@ const Register = () => {
     setIsLoading(true);
     
     try {
-      const result = await resendOTP(pendingUser?.email || formData.email);
+      const result = await resendOTP(pendingUser?.phone_number || formData.phoneNumber);
       
       if (result.success) {
         toast.success("OTP sent successfully!");
@@ -119,6 +132,13 @@ const Register = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value,
+    });
   };
 
   // OTP Verification Form
@@ -187,7 +207,7 @@ const Register = () => {
                 </div>
               </form>
             </CardContent>
-            <CardFooter>
+            <div className="px-6 pb-6">
               <div className="text-center text-sm w-full">
                 <span className="text-muted-foreground">Wrong number? </span>
                 <Button
@@ -199,7 +219,7 @@ const Register = () => {
                   Go back
                 </Button>
               </div>
-            </CardFooter>
+            </div>
           </Card>
         </motion.div>
       </div>
@@ -235,9 +255,10 @@ const Register = () => {
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
                       id="firstName"
+                      name="firstName"
                       placeholder="John"
                       value={formData.firstName}
-                      onChange={(e) => setFormData({...formData, firstName: e.target.value})}
+                      onChange={handleChange}
                       className="pl-10"
                       required
                     />
@@ -247,67 +268,46 @@ const Register = () => {
                   <Label htmlFor="lastName">Last Name</Label>
                   <Input
                     id="lastName"
+                    name="lastName"
                     placeholder="Doe"
                     value={formData.lastName}
-                    onChange={(e) => setFormData({...formData, lastName: e.target.value})}
+                    onChange={handleChange}
                     required
                   />
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="email">Email Address</Label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="john@example.com"
-                    value={formData.email}
-                    onChange={(e) => setFormData({...formData, email: e.target.value})}
-                    className="pl-10"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="username">Username</Label>
-                <Input
-                  id="username"
-                  placeholder="johndoe123"
-                  value={formData.username}
-                  onChange={(e) => setFormData({...formData, username: e.target.value})}
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="phone">Phone Number</Label>
+                <Label htmlFor="phoneNumber">Phone Number</Label>
                 <div className="relative">
                   <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
-                    id="phone"
+                    id="phoneNumber"
+                    name="phoneNumber"
                     type="tel"
                     placeholder="+254712345678"
                     value={formData.phoneNumber}
-                    onChange={(e) => setFormData({...formData, phoneNumber: e.target.value})}
+                    onChange={handleChange}
                     className="pl-10"
                     required
                   />
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  Include country code. This will be your login ID.
+                </p>
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="userType">Account Type</Label>
                 <select
                   id="userType"
+                  name="userType"
                   value={formData.userType}
-                  onChange={(e) => setFormData({...formData, userType: e.target.value})}
+                  onChange={handleChange}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-secondary"
                 >
                   <option value="customer">Customer</option>
-                  <option value="vendor">Vendor</option>
+                  <option value="vendor">Service Vendor</option>
                   <option value="mechanic">Mechanic</option>
                 </select>
               </div>
@@ -318,10 +318,11 @@ const Register = () => {
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     id="password"
+                    name="password"
                     type="password"
                     placeholder="Create password (min. 6 characters)"
                     value={formData.password}
-                    onChange={(e) => setFormData({...formData, password: e.target.value})}
+                    onChange={handleChange}
                     className="pl-10"
                     required
                     minLength={6}
@@ -335,10 +336,11 @@ const Register = () => {
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     id="confirmPassword"
+                    name="confirmPassword"
                     type="password"
                     placeholder="Confirm your password"
                     value={formData.confirmPassword}
-                    onChange={(e) => setFormData({...formData, confirmPassword: e.target.value})}
+                    onChange={handleChange}
                     className="pl-10"
                     required
                     minLength={6}
@@ -356,15 +358,25 @@ const Register = () => {
                 <ChevronRight className="ml-2 h-4 w-4" />
               </Button>
             </form>
+
+            {/* Phone Registration Info */}
+            <div className="mt-6 p-4 bg-muted/30 rounded-lg border">
+              <h4 className="text-sm font-semibold mb-2 text-center">Phone Registration</h4>
+              <div className="text-xs text-muted-foreground space-y-1">
+                <p>• Your phone number is your login ID</p>
+                <p>• OTP will be sent for verification</p>
+                <p>• No email required</p>
+              </div>
+            </div>
           </CardContent>
-          <CardFooter>
+          <div className="px-6 pb-6">
             <div className="text-center text-sm w-full">
               <span className="text-muted-foreground">Already have an account? </span>
               <Link to="/login" className="text-secondary hover:underline font-semibold">
                 Login
               </Link>
             </div>
-          </CardFooter>
+          </div>
         </Card>
       </motion.div>
     </div>

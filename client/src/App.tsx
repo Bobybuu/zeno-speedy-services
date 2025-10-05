@@ -16,6 +16,9 @@ import GasProviderDetail from "./pages/GasProviderDetail";
 import ProviderDetail from "./pages/ProviderDetail";
 import Cart from "./pages/Cart";
 import Payment from "./pages/Payment";
+import EditProfile from "./pages/EditProfile";
+import ChangePassword from "./pages/ChangePassword";
+import ForgotPassword from "./pages/ForgotPassword";
 
 const queryClient = new QueryClient();
 
@@ -38,6 +41,11 @@ const App = () => (
           <Route path="/cart" element={<Cart />} />
           <Route path="/payment" element={<Payment />} />
           <Route path="/account" element={<Account />} />
+
+           {/* New routes */}
+          <Route path="/edit-profile" element={<EditProfile />} />
+          <Route path="/change-password" element={<ChangePassword />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

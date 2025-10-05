@@ -1,18 +1,55 @@
-// src/context/AuthContext.js
-import React, { createContext, useState, useContext, useEffect } from 'react';
+// src/context/AuthContext.tsx
+import React, { createContext, useState, useContext, useEffect, ReactNode } from 'react';
 import { authAPI } from '../services/api';
 
-const AuthContext = createContext();
+// Define types
+interface User {
+  id: number;
+  email: string;
+  username: string;
+  first_name: string;
+  last_name: string;
+  phone_number: string;
+  user_type: string;
+  location: string;
+  is_verified: boolean;
+  phone_verified: boolean;
+  date_joined: string;
+}
+
+interface AuthContextType {
+  currentUser: User | null;
+  requiresOTP: boolean;
+  pendingUser: User | null;
+  login: (phone_number: string, password: string) => Promise<{ success: boolean; data?: any; error?: any }>;
+  register: (userData: any) => Promise<{ success: boolean; requiresOTP?: boolean; data?: any; error?: any }>;
+  verifyOTP: (phone_number: string, otp: string) => Promise<{ success: boolean; data?: any; error?: any }>;
+  resendOTP: (phone_number: string) => Promise<{ success: boolean; data?: any; error?: any }>;
+  logout: () => Promise<void>;
+  checkAuthentication: () => Promise<void>;
+  updateUser: (userData: Partial<User>) => void;
+}
+
+interface AuthProviderProps {
+  children: ReactNode;
+}
+
+// Create context with default values
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const useAuth = () => {
-  return useContext(AuthContext);
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
 };
 
-export const AuthProvider = ({ children }) => {
-  const [currentUser, setCurrentUser] = useState(null);
+export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [requiresOTP, setRequiresOTP] = useState(false);
-  const [pendingUser, setPendingUser] = useState(null);
+  const [pendingUser, setPendingUser] = useState<User | null>(null);
 
   // Check if user is logged in on app start
   useEffect(() => {
@@ -41,15 +78,18 @@ export const AuthProvider = ({ children }) => {
       localStorage.removeItem('access_token');
       localStorage.removeItem('refresh_token');
       localStorage.removeItem('user');
+      localStorage.removeItem('temp_access_token');
+      localStorage.removeItem('temp_refresh_token');
+      localStorage.removeItem('temp_user');
       setCurrentUser(null);
     } finally {
       setLoading(false);
     }
   };
 
-  const login = async (email, password) => {
+  const login = async (phone_number: string, password: string) => {
     try {
-      const response = await authAPI.login({ email, password });
+      const response = await authAPI.login({ phone_number, password });
       if (response.data) {
         const { user, access, refresh } = response.data;
         
@@ -62,7 +102,8 @@ export const AuthProvider = ({ children }) => {
         setRequiresOTP(false);
         return { success: true, data: response.data };
       }
-    } catch (error) {
+      return { success: false, error: { message: 'No response data' } };
+    } catch (error: any) {
       console.error('Login error:', error);
       return { 
         success: false, 
@@ -71,7 +112,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const register = async (userData) => {
+  const register = async (userData: any) => {
     try {
       const response = await authAPI.register(userData);
       if (response.data) {
@@ -98,7 +139,8 @@ export const AuthProvider = ({ children }) => {
           data: response.data 
         };
       }
-    } catch (error) {
+      return { success: false, error: { message: 'No response data' } };
+    } catch (error: any) {
       console.error('Registration error:', error);
       return { 
         success: false, 
@@ -107,9 +149,9 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const verifyOTP = async (email, otp) => {
+  const verifyOTP = async (phone_number: string, otp: string) => {
     try {
-      const response = await authAPI.verifyOTP({ email, otp });
+      const response = await authAPI.verifyOTP({ phone_number, otp });
       if (response.data) {
         const { user, access, refresh } = response.data;
         
@@ -127,7 +169,8 @@ export const AuthProvider = ({ children }) => {
         
         return { success: true, data: response.data };
       }
-    } catch (error) {
+      return { success: false, error: { message: 'No response data' } };
+    } catch (error: any) {
       console.error('OTP verification error:', error);
       return { 
         success: false, 
@@ -136,11 +179,11 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const resendOTP = async (email) => {
+  const resendOTP = async (phone_number: string) => {
     try {
-      const response = await authAPI.resendOTP({ email });
+      const response = await authAPI.resendOTP({ phone_number });
       return { success: true, data: response.data };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Resend OTP error:', error);
       return { 
         success: false, 
@@ -169,12 +212,14 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const updateUser = (userData) => {
-    setCurrentUser(prev => ({ ...prev, ...userData }));
-    localStorage.setItem('user', JSON.stringify({ ...currentUser, ...userData }));
+  const updateUser = (userData: Partial<User>) => {
+    setCurrentUser(prev => prev ? { ...prev, ...userData } : null);
+    if (currentUser) {
+      localStorage.setItem('user', JSON.stringify({ ...currentUser, ...userData }));
+    }
   };
 
-  const value = {
+  const value: AuthContextType = {
     currentUser,
     requiresOTP,
     pendingUser,
