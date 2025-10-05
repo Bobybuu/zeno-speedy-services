@@ -1,4 +1,6 @@
 # users/urls.py
+from rest_framework_simplejwt.views import  TokenRefreshView
+
 from django.urls import path
 from .views import (
     RegisterView,
@@ -20,6 +22,7 @@ urlpatterns = [
     path('verify-otp/', VerifyOTPView.as_view(), name='verify-otp'),
     path('resend-otp/', ResendOTPView.as_view(), name='resend-otp'),
     path('check-auth/', CheckAuthView.as_view(), name='check-auth'),
+    path('token/refresh/', TokenRefreshView.as_view(), name='token-refresh'),  # Django SimpleJWT
     
     # Admin routes
     path('users/', UserListView.as_view(), name='user-list'),
