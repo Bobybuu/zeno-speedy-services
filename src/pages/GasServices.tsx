@@ -117,23 +117,17 @@ const GasServices = () => {
               >
                 <Card 
                   className="p-4 cursor-pointer hover:shadow-lg transition-all duration-300"
-                  onClick={() => navigate(`/services/gas/${provider.id}`)}
+                  onClick={() => navigate(`/provider/${provider.id}`)}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
-                      <h3 className="font-semibold">{provider.name}</h3>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
-                        <MapPin className="h-3 w-3" />
+                      <h3 className="font-semibold text-lg">{provider.name}</h3>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground mt-2">
+                        <MapPin className="h-4 w-4" />
                         <span>{provider.location}</span>
-                        <span>•</span>
-                        <span>{provider.distance}</span>
                       </div>
-                      <div className="flex items-center gap-2 mt-2">
-                        <span className="text-lg font-bold text-primary">{provider.price}</span>
-                        <div className="flex items-center ml-auto">
-                          <span className="text-yellow-500">⭐</span>
-                          <span className="text-sm ml-1">{provider.rating}</span>
-                        </div>
+                      <div className="text-sm text-muted-foreground mt-1">
+                        <span className="font-medium text-primary">{provider.distance}</span> away
                       </div>
                     </div>
                     <div className="text-4xl ml-4">🔥</div>
@@ -155,32 +149,21 @@ const GasServices = () => {
               >
                 <Card 
                   className="p-4 cursor-pointer hover:shadow-lg transition-all duration-300"
-                  onClick={() => navigate(`/services/gas/${provider.id}`)}
+                  onClick={() => navigate(`/provider/${provider.id}`)}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
                       <h3 className="font-semibold text-lg">{provider.name}</h3>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
-                        <MapPin className="h-3 w-3" />
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground mt-2">
+                        <MapPin className="h-4 w-4" />
                         <span>{provider.location}</span>
-                        <span>•</span>
-                        <span>{provider.distance}</span>
                       </div>
-                      <div className="flex items-center gap-4 mt-3">
-                        <span className="text-xl font-bold text-primary">{provider.price}</span>
-                        <div className="flex items-center">
-                          <span className="text-yellow-500">⭐</span>
-                          <span className="text-sm ml-1 font-medium">{provider.rating}</span>
-                          <span className="text-xs text-muted-foreground ml-1">(124 reviews)</span>
-                        </div>
+                      <div className="text-sm text-muted-foreground mt-1">
+                        <span className="font-medium text-primary">{provider.distance}</span> away
                       </div>
                       <Button 
                         className="mt-3 bg-secondary hover:bg-secondary/90 text-white"
                         size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/services/gas/${provider.id}`);
-                        }}
                       >
                         View Details
                       </Button>

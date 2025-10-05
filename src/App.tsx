@@ -13,6 +13,9 @@ import OxygenServices from "./pages/OxygenServices";
 import NotFound from "./pages/NotFound";
 import Account from "./pages/Account";
 import GasProviderDetail from "./pages/GasProviderDetail";
+import ProviderDetail from "./pages/ProviderDetail";
+import Cart from "./pages/Cart";
+import Payment from "./pages/Payment";
 
 const queryClient = new QueryClient();
 
@@ -29,8 +32,11 @@ const App = () => (
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/services/gas" element={<GasServices />} />
           <Route path="/services/gas/:id" element={<GasProviderDetail />} />
+          <Route path="/provider/:id" element={<ProviderDetail />} />
           <Route path="/services/roadside" element={<RoadsideServices />} />
           <Route path="/services/oxygen" element={<OxygenServices />} />
+          <Route path="/cart" element={<Cart />} />
+          <Route path="/payment" element={<Payment />} />
           <Route path="/account" element={<Account />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
