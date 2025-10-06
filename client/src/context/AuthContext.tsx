@@ -20,6 +20,7 @@ interface User {
 interface AuthContextType {
   currentUser: User | null;
   requiresOTP: boolean;
+  loading: boolean;
   pendingUser: User | null;
   login: (phone_number: string, password: string) => Promise<{ success: boolean; data?: any; error?: any }>;
   register: (userData: any) => Promise<{ success: boolean; requiresOTP?: boolean; data?: any; error?: any }>;
@@ -50,6 +51,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [requiresOTP, setRequiresOTP] = useState(false);
   const [pendingUser, setPendingUser] = useState<User | null>(null);
+  
 
   // Check if user is logged in on app start
   useEffect(() => {
@@ -230,6 +232,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     logout,
     checkAuthentication,
     updateUser,
+    loading,
   };
 
   return (
