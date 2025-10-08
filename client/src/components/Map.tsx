@@ -7,7 +7,7 @@ interface Provider {
   name: string;
   location: string;
   coords: [number, number];
-  price?: string;
+  price: string;
 }
 
 interface MapProps {

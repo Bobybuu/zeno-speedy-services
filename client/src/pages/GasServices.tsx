@@ -8,30 +8,34 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Map from "@/components/Map";
 import BottomNav from "@/components/BottomNav";
 import { motion } from "framer-motion";
-import { servicesAPI } from "@/services/api";
+import { gasProductsAPI, vendorsAPI } from "@/services/api"; // ✅ Use correct APIs
 import { toast } from "sonner";
 
-interface Service {
+// Updated interface for Gas Products
+interface GasProduct {
   id: number;
   name: string;
-  description: string;
-  price: string;
-  available: boolean;
+  gas_type: string;
+  cylinder_size: string;
+  price_with_cylinder: number;
+  price_without_cylinder: number;
   vendor_name: string;
-  vendor_type: string;
-  vendor_contact: string;
-  vendor_address: string;
+  vendor_city: string;
   vendor_latitude: number;
   vendor_longitude: number;
-  images: Array<{ id: number; image: string; is_primary: boolean }>;
-  created_at: string;
+  is_available: boolean;
+  in_stock: boolean;
+  stock_quantity: number;
+  description?: string;
+  vendor_address: string;
+  vendor_contact: string;
 }
 
 const GasServices = () => {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState("map");
-  const [services, setServices] = useState<Service[]>([]);
+  const [products, setProducts] = useState<GasProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
 
@@ -42,23 +46,24 @@ const GasServices = () => {
         (position) => {
           const { latitude, longitude } = position.coords;
           setUserLocation([latitude, longitude]);
-          fetchGasServices(latitude, longitude);
+          fetchGasProducts(latitude, longitude);
         },
         (error) => {
           console.error("Error getting location:", error);
-          fetchGasServices(); // Fetch without location
+          fetchGasProducts(); // Fetch without location
         }
       );
     } else {
-      fetchGasServices(); // Fetch without location
+      fetchGasProducts(); // Fetch without location
     }
   }, []);
 
-  const fetchGasServices = async (lat?: number, lng?: number) => {
+  const fetchGasProducts = async (lat?: number, lng?: number) => {
     try {
       setLoading(true);
       const filters: any = {
-        category__name: 'gas',
+        is_available: true,
+        vendor__is_verified: true
       };
 
       // Add location filters if available
@@ -68,27 +73,86 @@ const GasServices = () => {
         filters.radius = 20; // 20km radius
       }
 
-      const response = await servicesAPI.getServices(filters);
-      setServices(response.data);
+      const response = await gasProductsAPI.getGasProducts(filters); // ✅ Use gasProductsAPI
+      setProducts(response.data);
     } catch (error: any) {
-      console.error("Error fetching gas services:", error);
-      toast.error("Failed to load gas services");
+      console.error("Error fetching gas products:", error);
+      toast.error("Failed to load gas products");
       
       // Fallback to mock data if API fails
-      
+      setProducts(getMockGasProducts());
     } finally {
       setLoading(false);
     }
   };
 
-  const filteredServices = services.filter(service =>
-    service.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    service.vendor_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    service.vendor_address.toLowerCase().includes(searchQuery.toLowerCase())
+  // Mock data fallback
+  const getMockGasProducts = (): GasProduct[] => [
+    {
+      id: 1,
+      name: "Pro Gas LPG",
+      gas_type: "lpg",
+      cylinder_size: "13kg",
+      price_with_cylinder: 3500,
+      price_without_cylinder: 2800,
+      vendor_name: "Nairobi Gas Center",
+      vendor_city: "Nairobi",
+      vendor_latitude: -1.286389,
+      vendor_longitude: 36.817223,
+      is_available: true,
+      in_stock: true,
+      stock_quantity: 50,
+      description: "Premium quality LPG gas",
+      vendor_address: "Moi Avenue, Nairobi CBD",
+      vendor_contact: "+254712345678"
+    },
+    {
+      id: 2,
+      name: "K-Gas LPG",
+      gas_type: "lpg",
+      cylinder_size: "6kg",
+      price_with_cylinder: 1800,
+      price_without_cylinder: 1500,
+      vendor_name: "Westlands Gas Shop",
+      vendor_city: "Nairobi",
+      vendor_latitude: -1.266667,
+      vendor_longitude: 36.800000,
+      is_available: true,
+      in_stock: true,
+      stock_quantity: 30,
+      description: "Reliable household gas",
+      vendor_address: "Westlands Mall, Nairobi",
+      vendor_contact: "+254723456789"
+    },
+    {
+      id: 3,
+      name: "Safe Gas LPG",
+      gas_type: "lpg",
+      cylinder_size: "22kg",
+      price_with_cylinder: 5200,
+      price_without_cylinder: 4500,
+      vendor_name: "Kilimani Gas Depot",
+      vendor_city: "Nairobi",
+      vendor_latitude: -1.300000,
+      vendor_longitude: 36.783333,
+      is_available: true,
+      in_stock: true,
+      stock_quantity: 20,
+      description: "Commercial grade LPG",
+      vendor_address: "Argwings Kodhek Road, Kilimani",
+      vendor_contact: "+254734567890"
+    }
+  ];
+
+  const filteredProducts = products.filter(product =>
+    product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    product.vendor_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    product.vendor_address.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    product.cylinder_size.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): string => {
-    if (!lat1 || !lon1) return "Unknown";
+    if (!lat1 || !lon1 || !lat2 || !lon2) return "Unknown";
     
     const R = 6371; // Earth's radius in km
     const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -103,19 +167,19 @@ const GasServices = () => {
     return distance < 1 ? `${Math.round(distance * 1000)}m` : `${distance.toFixed(1)}km`;
   };
 
-  const formatPrice = (price: string) => {
-    return `KSh ${parseFloat(price).toLocaleString()}`;
+  const formatPrice = (price: number) => {
+    return `KSh ${price.toLocaleString()}`;
   };
 
-  const handleProviderClick = (service: Service) => {
-    navigate(`/provider/${service.id}`, { state: { service } });
+  const handleProductClick = (product: GasProduct) => {
+    navigate(`/gas-product/${product.id}`, { state: { product } });
   };
 
   const handleRefresh = () => {
     if (userLocation) {
-      fetchGasServices(userLocation[0], userLocation[1]);
+      fetchGasProducts(userLocation[0], userLocation[1]);
     } else {
-      fetchGasServices();
+      fetchGasProducts();
     }
   };
 
@@ -124,7 +188,7 @@ const GasServices = () => {
       <div className="min-h-screen bg-background pb-20 flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
-          <p className="text-muted-foreground">Loading gas services...</p>
+          <p className="text-muted-foreground">Loading gas products...</p>
         </div>
       </div>
     );
@@ -149,7 +213,7 @@ const GasServices = () => {
               <div className="flex items-center text-xs text-white/80">
                 <MapPin className="h-3 w-3 mr-1" />
                 <span>
-                  {userLocation ? "Near you" : "Gas services nearby"}
+                  {userLocation ? "Near you" : "Gas products nearby"}
                 </span>
               </div>
             </div>
@@ -176,7 +240,7 @@ const GasServices = () => {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               type="search"
-              placeholder="Search gas providers or locations..."
+              placeholder="Search gas products, vendors, or locations..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10 bg-white text-foreground"
@@ -195,74 +259,81 @@ const GasServices = () => {
         <TabsContent value="map" className="m-0">
           <div className="h-[400px] relative">
             <Map 
-              providers={filteredServices.map(service => ({
-                id: service.id,
-                name: service.vendor_name,
-                location: service.vendor_address,
-                price: service.price,
-                rating: 4.5, // You can add ratings to your Service model
+              providers={filteredProducts.map(product => ({
+                id: product.id,
+                name: product.vendor_name,
+                location: product.vendor_address,
+                price: formatPrice(product.price_with_cylinder),
+                rating: 4.5,
                 distance: userLocation 
                   ? calculateDistance(
                       userLocation[0], 
                       userLocation[1], 
-                      service.vendor_latitude, 
-                      service.vendor_longitude
+                      product.vendor_latitude, 
+                      product.vendor_longitude
                     )
                   : "Unknown",
-                coords: [service.vendor_latitude, service.vendor_longitude] as [number, number]
+                coords: [product.vendor_latitude, product.vendor_longitude] as [number, number]
               }))}
               userLocation={userLocation}
             />
           </div>
           
-          {/* Provider cards below map */}
+          {/* Product cards below map */}
           <div className="p-4 space-y-3">
-            {filteredServices.length === 0 ? (
+            {filteredProducts.length === 0 ? (
               <Card className="p-8 text-center">
                 <div className="text-6xl mb-4">🔥</div>
-                <h3 className="text-lg font-semibold mb-2">No gas services found</h3>
+                <h3 className="text-lg font-semibold mb-2">No gas products found</h3>
                 <p className="text-muted-foreground">
-                  {searchQuery ? "Try adjusting your search terms" : "No gas services available in your area"}
+                  {searchQuery ? "Try adjusting your search terms" : "No gas products available in your area"}
                 </p>
               </Card>
             ) : (
-              filteredServices.map((service, index) => (
+              filteredProducts.map((product, index) => (
                 <motion.div
-                  key={service.id}
+                  key={product.id}
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: index * 0.1 }}
                 >
                   <Card 
                     className="p-4 cursor-pointer hover:shadow-lg transition-all duration-300 border-2 border-transparent hover:border-primary/20"
-                    onClick={() => handleProviderClick(service)}
+                    onClick={() => handleProductClick(product)}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-2">
-                          <h3 className="font-semibold text-lg">{service.vendor_name}</h3>
-                          {!service.available && (
+                          <h3 className="font-semibold text-lg">{product.vendor_name}</h3>
+                          {!product.is_available && (
                             <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded-full">
-                              Closed
+                              Out of Stock
+                            </span>
+                          )}
+                          {product.in_stock && product.stock_quantity < 10 && (
+                            <span className="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded-full">
+                              Low Stock
                             </span>
                           )}
                         </div>
-                        <p className="text-sm text-muted-foreground mb-2">{service.name}</p>
+                        <p className="text-sm text-muted-foreground mb-2">
+                          {product.name} - {product.cylinder_size}
+                        </p>
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                           <MapPin className="h-4 w-4" />
-                          <span className="flex-1">{service.vendor_address}</span>
+                          <span className="flex-1">{product.vendor_address}</span>
                         </div>
                         <div className="flex items-center justify-between mt-2">
                           <div className="text-lg font-bold text-primary">
-                            {formatPrice(service.price)}
+                            {formatPrice(product.price_with_cylinder)}
                           </div>
                           {userLocation && (
                             <div className="text-sm text-muted-foreground">
                               {calculateDistance(
                                 userLocation[0], 
                                 userLocation[1], 
-                                service.vendor_latitude, 
-                                service.vendor_longitude
+                                product.vendor_latitude, 
+                                product.vendor_longitude
                               )} away
                             </div>
                           )}
@@ -273,7 +344,10 @@ const GasServices = () => {
                             <span className="text-sm">4.5</span>
                           </div>
                           <span className="text-sm text-muted-foreground">
-                            • {service.vendor_contact}
+                            • {product.vendor_contact}
+                          </span>
+                          <span className="text-sm text-muted-foreground">
+                            • Stock: {product.stock_quantity}
                           </span>
                         </div>
                       </div>
@@ -288,52 +362,59 @@ const GasServices = () => {
 
         <TabsContent value="list" className="m-0 p-4">
           <div className="space-y-3">
-            {filteredServices.length === 0 ? (
+            {filteredProducts.length === 0 ? (
               <Card className="p-8 text-center">
                 <div className="text-6xl mb-4">🔥</div>
-                <h3 className="text-lg font-semibold mb-2">No gas services found</h3>
+                <h3 className="text-lg font-semibold mb-2">No gas products found</h3>
                 <p className="text-muted-foreground">
-                  {searchQuery ? "Try adjusting your search terms" : "No gas services available in your area"}
+                  {searchQuery ? "Try adjusting your search terms" : "No gas products available in your area"}
                 </p>
               </Card>
             ) : (
-              filteredServices.map((service, index) => (
+              filteredProducts.map((product, index) => (
                 <motion.div
-                  key={service.id}
+                  key={product.id}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.05 }}
                 >
                   <Card 
                     className="p-4 cursor-pointer hover:shadow-lg transition-all duration-300 border-2 border-transparent hover:border-primary/20"
-                    onClick={() => handleProviderClick(service)}
+                    onClick={() => handleProductClick(product)}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-2">
-                          <h3 className="font-semibold text-lg">{service.vendor_name}</h3>
-                          {!service.available && (
+                          <h3 className="font-semibold text-lg">{product.vendor_name}</h3>
+                          {!product.is_available && (
                             <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded-full">
-                              Closed
+                              Out of Stock
+                            </span>
+                          )}
+                          {product.in_stock && product.stock_quantity < 10 && (
+                            <span className="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded-full">
+                              Low Stock
                             </span>
                           )}
                         </div>
-                        <p className="text-sm text-muted-foreground mb-2">{service.name}</p>
+                        <p className="text-sm text-muted-foreground mb-2">
+                          {product.name} - {product.cylinder_size}
+                        </p>
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                           <MapPin className="h-4 w-4" />
-                          <span>{service.vendor_address}</span>
+                          <span>{product.vendor_address}</span>
                         </div>
                         <div className="flex items-center justify-between mt-3">
                           <div className="text-lg font-bold text-primary">
-                            {formatPrice(service.price)}
+                            {formatPrice(product.price_with_cylinder)}
                           </div>
                           {userLocation && (
                             <div className="text-sm text-muted-foreground">
                               {calculateDistance(
                                 userLocation[0], 
                                 userLocation[1], 
-                                service.vendor_latitude, 
-                                service.vendor_longitude
+                                product.vendor_latitude, 
+                                product.vendor_longitude
                               )} away
                             </div>
                           )}
@@ -344,15 +425,18 @@ const GasServices = () => {
                             <span className="text-sm">4.5</span>
                           </div>
                           <span className="text-sm text-muted-foreground">
-                            • {service.vendor_contact}
+                            • {product.vendor_contact}
+                          </span>
+                          <span className="text-sm text-muted-foreground">
+                            • Stock: {product.stock_quantity}
                           </span>
                         </div>
                         <Button 
                           className="mt-3 bg-secondary hover:bg-secondary/90 text-white w-full"
                           size="sm"
-                          disabled={!service.available}
+                          disabled={!product.is_available}
                         >
-                          {service.available ? "View Details & Order" : "Currently Unavailable"}
+                          {product.is_available ? "View Details & Order" : "Out of Stock"}
                         </Button>
                       </div>
                       <div className="text-5xl ml-4">🔥</div>

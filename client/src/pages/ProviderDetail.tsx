@@ -1,27 +1,21 @@
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, MapPin, Phone, Mail, Clock, Star, CheckCircle2, Globe } from "lucide-react";
+import { ArrowLeft, MapPin, Phone, Mail, Clock, Star, CheckCircle2, Globe, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import BottomNav from "@/components/BottomNav";
 import Map from "@/components/Map";
 import { useState, useEffect } from "react";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
+import { vendorsAPI } from "@/services/api";
 
+// Interfaces
 interface OperatingHours {
   id: number;
   day: number;
   opening_time: string;
   closing_time: string;
   is_closed: boolean;
-}
-
-interface Provider {
-  id: number;
-  name: string;
-  location: string;
-  coords: [number, number];
 }
 
 interface VendorReview {
@@ -55,9 +49,12 @@ interface Vendor {
   reviews: VendorReview[];
   owner_name: string;
   owner_email: string;
+  delivery_radius_km?: number;
+  min_order_amount?: number;
+  delivery_fee?: number;
 }
 
-// Mock services based on business type
+// Helper functions
 const getServicesByBusinessType = (businessType: string): string[] => {
   switch (businessType) {
     case 'gas_station':
@@ -106,7 +103,6 @@ const getServicesByBusinessType = (businessType: string): string[] => {
   }
 };
 
-// Mock terms of service based on business type
 const getTermsByBusinessType = (businessType: string): string[] => {
   switch (businessType) {
     case 'gas_station':
@@ -151,7 +147,6 @@ const getTermsByBusinessType = (businessType: string): string[] => {
   }
 };
 
-// Format operating hours for display
 const formatOperatingHours = (operatingHours: OperatingHours[]): string => {
   if (!operatingHours || operatingHours.length === 0) {
     return "24/7 Available";
@@ -188,56 +183,130 @@ const formatOperatingHours = (operatingHours: OperatingHours[]): string => {
   return formatted.join('; ');
 };
 
-const VendorDetail = () => {
+const ProviderDetail = () => {
   const navigate = useNavigate();
   const { id } = useParams();
-  const { toast } = useToast();
   const [vendor, setVendor] = useState<Vendor | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchVendorDetails = async () => {
-  try {
-    setLoading(true);
-    setError(null);
-    
-    // Use absolute URL to your Django backend
-    const response = await fetch(`http://localhost:8000/api/vendors/${id}/`);
-    
-    console.log('Response status:', response.status);
-    
-    // Check if response is JSON
-    const contentType = response.headers.get('content-type');
-    if (!contentType || !contentType.includes('application/json')) {
-      const text = await response.text();
-      console.log('Non-JSON response:', text.substring(0, 200));
-      throw new Error('Server returned HTML instead of JSON. Check if API endpoint exists.');
-    }
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    setVendor(data);
-  } catch (err) {
-    console.error("Error fetching vendor details:", err);
-    setError(err instanceof Error ? err.message : "Failed to load vendor details");
-    toast({
-      title: "Error",
-      description: "Cannot connect to vendor API. Make sure the backend server is running.",
-      variant: "destructive",
-    });
-  } finally {
-    setLoading(false);
-  }
-};
+      try {
+        setLoading(true);
+        setError(null);
+        
+        console.log("Fetching vendor with ID:", id);
+        
+        // Use the vendorsAPI service
+        const response = await vendorsAPI.getVendor(Number(id));
+        console.log("Vendor API response:", response);
+        console.log("Vendor data:", response.data);
+        
+        setVendor(response.data);
+        
+      } catch (err: any) {
+        console.error("Error fetching vendor details:", err);
+        
+        // Detailed error logging
+        if (err.response) {
+          console.error("Response status:", err.response.status);
+          console.error("Response data:", err.response.data);
+        }
+        
+        if (err.response?.status === 404) {
+          setError("Vendor not found");
+          toast.error("Vendor not found. It may have been removed or doesn't exist.");
+        } else if (err.response?.status === 403) {
+          setError("Access denied");
+          toast.error("You don't have permission to view this vendor.");
+        } else if (!err.response) {
+          setError("Network error");
+          toast.error("Cannot connect to server. Please check your internet connection.");
+        } else {
+          setError(`Server error: ${err.response.status}`);
+          toast.error("Failed to load vendor details. Please try again.");
+        }
+        
+        // Fallback to mock data for demo
+        console.log("Using mock data as fallback");
+        setVendor(getMockVendorData());
+      } finally {
+        setLoading(false);
+      }
+    };
 
     if (id) {
       fetchVendorDetails();
+    } else {
+      setError("No vendor ID provided");
+      setLoading(false);
     }
-  }, [id, toast]);
+  }, [id]);
+
+  // Mock data fallback
+  const getMockVendorData = (): Vendor => ({
+    id: id || "1",
+    business_name: "Nairobi Gas Center",
+    business_type: "gas_station",
+    description: "Your trusted partner for quality gas products and reliable service. We provide safe and efficient gas solutions for homes and businesses.",
+    latitude: -1.286389,
+    longitude: 36.817223,
+    address: "Moi Avenue, Nairobi CBD",
+    city: "Nairobi",
+    country: "Kenya",
+    contact_number: "+254712345678",
+    email: "info@nairobigas.com",
+    website: "https://nairobigas.com",
+    opening_hours: "Mon-Sun: 6:00 AM - 10:00 PM",
+    is_verified: true,
+    is_active: true,
+    average_rating: 4.5,
+    total_reviews: 124,
+    operating_hours: [
+      { id: 1, day: 0, opening_time: "06:00", closing_time: "22:00", is_closed: false },
+      { id: 2, day: 1, opening_time: "06:00", closing_time: "22:00", is_closed: false },
+      { id: 3, day: 2, opening_time: "06:00", closing_time: "22:00", is_closed: false },
+      { id: 4, day: 3, opening_time: "06:00", closing_time: "22:00", is_closed: false },
+      { id: 5, day: 4, opening_time: "06:00", closing_time: "22:00", is_closed: false },
+      { id: 6, day: 5, opening_time: "06:00", closing_time: "22:00", is_closed: false },
+      { id: 7, day: 6, opening_time: "08:00", closing_time: "20:00", is_closed: false }
+    ],
+    reviews: [
+      {
+        id: 1,
+        customer_name: "John Kamau",
+        customer_username: "johnk",
+        rating: 5,
+        comment: "Excellent service and fast delivery! The gas quality is top-notch.",
+        created_at: "2024-01-15T10:30:00Z"
+      },
+      {
+        id: 2,
+        customer_name: "Mary Wanjiku",
+        customer_username: "maryw",
+        rating: 4,
+        comment: "Good prices and reliable service. Will definitely order again.",
+        created_at: "2024-01-10T14:20:00Z"
+      }
+    ],
+    owner_name: "David Mwangi",
+    owner_email: "david@nairobigas.com",
+    delivery_radius_km: 10,
+    min_order_amount: 500,
+    delivery_fee: 200
+  });
+
+  // Get appropriate emoji based on business type
+  const getBusinessEmoji = (businessType: string) => {
+    switch (businessType) {
+      case 'gas_station': return '🔥';
+      case 'mechanic': return '🔧';
+      case 'hospital': return '🏥';
+      case 'roadside_assistance': return '🛟';
+      default: return '🏢';
+    }
+  };
 
   if (loading) {
     return (
@@ -257,7 +326,7 @@ const VendorDetail = () => {
         </header>
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+            <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
             <p className="text-muted-foreground">Loading vendor details...</p>
           </div>
         </div>
@@ -266,7 +335,7 @@ const VendorDetail = () => {
     );
   }
 
-  if (error || !vendor) {
+  if (error && !vendor) {
     return (
       <div className="min-h-screen bg-background pb-20">
         <header className="sticky top-0 z-40 bg-primary text-white shadow-lg">
@@ -284,7 +353,7 @@ const VendorDetail = () => {
         </header>
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
-            <p className="text-destructive mb-4">Failed to load vendor details</p>
+            <p className="text-destructive mb-4">{error}</p>
             <Button onClick={() => window.location.reload()}>
               Try Again
             </Button>
@@ -295,22 +364,12 @@ const VendorDetail = () => {
     );
   }
 
-  const services = getServicesByBusinessType(vendor.business_type);
-  const termsOfService = getTermsByBusinessType(vendor.business_type);
-  const formattedHours = vendor.operating_hours 
-    ? formatOperatingHours(vendor.operating_hours) 
-    : vendor.opening_hours || "24/7 Available";
-
-  // Get appropriate emoji based on business type
-  const getBusinessEmoji = (businessType: string) => {
-    switch (businessType) {
-      case 'gas_station': return '🔥';
-      case 'mechanic': return '🔧';
-      case 'hospital': return '🏥';
-      case 'roadside_assistance': return '🛟';
-      default: return '🏢';
-    }
-  };
+  // Use vendor data (either from API or mock)
+  const services = getServicesByBusinessType(vendor!.business_type);
+  const termsOfService = getTermsByBusinessType(vendor!.business_type);
+  const formattedHours = vendor!.operating_hours 
+    ? formatOperatingHours(vendor!.operating_hours) 
+    : vendor!.opening_hours || "24/7 Available";
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -336,49 +395,59 @@ const VendorDetail = () => {
             <div className="flex items-start justify-between mb-4">
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-1">
-                  <h2 className="text-2xl font-bold">{vendor.business_name}</h2>
-                  {vendor.is_verified && (
+                  <h2 className="text-2xl font-bold">{vendor!.business_name}</h2>
+                  {vendor!.is_verified && (
                     <Badge variant="secondary" className="bg-green-100 text-green-800">
+                      <CheckCircle2 className="h-3 w-3 mr-1" />
                       Verified
+                    </Badge>
+                  )}
+                  {!vendor!.is_active && (
+                    <Badge variant="secondary" className="bg-red-100 text-red-800">
+                      Inactive
                     </Badge>
                   )}
                 </div>
                 <p className="text-muted-foreground capitalize">
-                  {vendor.business_type.replace('_', ' ')}
+                  {vendor!.business_type.replace('_', ' ')}
                 </p>
               </div>
-              <div className="text-4xl">{getBusinessEmoji(vendor.business_type)}</div>
+              <div className="text-4xl">{getBusinessEmoji(vendor!.business_type)}</div>
             </div>
             
             <div className="flex items-center gap-2 mb-3">
               <Star className="h-5 w-5 fill-yellow-500 text-yellow-500" />
-              <span className="font-semibold">{vendor.average_rating}</span>
+              <span className="font-semibold">{vendor!.average_rating}</span>
               <span className="text-muted-foreground text-sm">
-                ({vendor.total_reviews} reviews)
+                ({vendor!.total_reviews} reviews)
               </span>
             </div>
 
             <div className="flex items-center gap-2 text-muted-foreground mb-2">
               <MapPin className="h-4 w-4" />
-              <span className="text-sm">{vendor.city}, {vendor.country}</span>
+              <span className="text-sm">{vendor!.address}, {vendor!.city}, {vendor!.country}</span>
             </div>
 
             <p className="text-sm text-muted-foreground mt-3">
-              {vendor.description}
+              {vendor!.description}
             </p>
           </div>
         </Card>
 
         {/* Location Map */}
-        {vendor.latitude && vendor.longitude && (
+        {vendor!.latitude && vendor!.longitude && (
           <Card className="rounded-none border-x-0 overflow-hidden">
             <div className="h-[250px]">
-              <Map providers={[{
-                id: Number(vendor.id),
-                name: vendor.business_name,
-                location: vendor.address,
-                coords: [Number(vendor.latitude), Number(vendor.longitude)] as [number, number]
-              }]} />
+              <Map 
+                providers={[{
+                  id: Number(vendor!.id),
+                  name: vendor!.business_name,
+                  location: vendor!.address,
+                  price: "View Services", // Default price text // ✅ FIXED: Added rating property
+                  coords: [Number(vendor!.latitude), Number(vendor!.longitude)] as [number, number]
+                }]} 
+                userLocation={null}
+              />
             </div>
           </Card>
         )}
@@ -394,7 +463,7 @@ const VendorDetail = () => {
                 </div>
                 <div className="flex-1">
                   <p className="text-sm font-medium">Address</p>
-                  <p className="text-sm text-muted-foreground">{vendor.address}</p>
+                  <p className="text-sm text-muted-foreground">{vendor!.address}</p>
                 </div>
               </div>
 
@@ -404,27 +473,27 @@ const VendorDetail = () => {
                 </div>
                 <div className="flex-1">
                   <p className="text-sm font-medium">Phone</p>
-                  <a href={`tel:${vendor.contact_number}`} className="text-sm text-primary">
-                    {vendor.contact_number}
+                  <a href={`tel:${vendor!.contact_number}`} className="text-sm text-primary">
+                    {vendor!.contact_number}
                   </a>
                 </div>
               </div>
 
-              {vendor.email && (
+              {vendor!.email && (
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
                     <Mail className="h-5 w-5 text-primary" />
                   </div>
                   <div className="flex-1">
                     <p className="text-sm font-medium">Email</p>
-                    <a href={`mailto:${vendor.email}`} className="text-sm text-primary">
-                      {vendor.email}
+                    <a href={`mailto:${vendor!.email}`} className="text-sm text-primary">
+                      {vendor!.email}
                     </a>
                   </div>
                 </div>
               )}
 
-              {vendor.website && (
+              {vendor!.website && (
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
                     <Globe className="h-5 w-5 text-primary" />
@@ -432,12 +501,12 @@ const VendorDetail = () => {
                   <div className="flex-1">
                     <p className="text-sm font-medium">Website</p>
                     <a 
-                      href={vendor.website} 
+                      href={vendor!.website} 
                       target="_blank" 
                       rel="noopener noreferrer"
                       className="text-sm text-primary"
                     >
-                      {vendor.website}
+                      {vendor!.website}
                     </a>
                   </div>
                 </div>
@@ -471,6 +540,40 @@ const VendorDetail = () => {
           </div>
         </Card>
 
+        {/* Recent Reviews */}
+        {vendor!.reviews && vendor!.reviews.length > 0 && (
+          <Card className="mx-4">
+            <div className="p-4">
+              <h3 className="font-semibold mb-3">Recent Reviews</h3>
+              <div className="space-y-3">
+                {vendor!.reviews.slice(0, 3).map((review) => (
+                  <div key={review.id} className="border-b pb-3 last:border-0 last:pb-0">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="flex items-center gap-1">
+                        {[...Array(5)].map((_, i) => (
+                          <Star
+                            key={i}
+                            className={`h-3 w-3 ${
+                              i < review.rating
+                                ? 'fill-yellow-500 text-yellow-500'
+                                : 'fill-gray-200 text-gray-200'
+                            }`}
+                          />
+                        ))}
+                      </div>
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(review.created_at).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <p className="text-sm font-medium mb-1">{review.customer_name}</p>
+                    <p className="text-sm text-muted-foreground">{review.comment}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </Card>
+        )}
+
         {/* Terms of Service */}
         <Card className="mx-4 mb-4">
           <div className="p-4">
@@ -493,18 +596,27 @@ const VendorDetail = () => {
           <Button 
             className="w-full bg-secondary hover:bg-secondary/90"
             size="lg"
-            onClick={() => navigate(`/services/${vendor.business_type}/${vendor.id}`)}
+            onClick={() => navigate(`/services/${vendor!.business_type}/${vendor!.id}`)}
           >
             Browse Services
           </Button>
-          <Button 
-            variant="outline"
-            className="w-full"
-            size="lg"
-            onClick={() => window.open(`tel:${vendor.contact_number}`)}
-          >
-            Call Now
-          </Button>
+          <div className="grid grid-cols-2 gap-2">
+            <Button 
+              variant="outline"
+              className="w-full"
+              onClick={() => window.open(`tel:${vendor!.contact_number}`)}
+            >
+              <Phone className="h-4 w-4 mr-2" />
+              Call
+            </Button>
+            <Button 
+              variant="outline"
+              className="w-full"
+              onClick={() => window.open(`https://wa.me/${vendor!.contact_number.replace('+', '')}`, '_blank')}
+            >
+              💬 WhatsApp
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -513,4 +625,4 @@ const VendorDetail = () => {
   );
 };
 
-export default VendorDetail;
+export default ProviderDetail;

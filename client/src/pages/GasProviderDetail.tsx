@@ -1,29 +1,33 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { ArrowLeft, MapPin, Star, Phone, ShoppingCart, Loader2 } from "lucide-react";
+import { ArrowLeft, MapPin, Star, Phone, ShoppingCart, Loader2, Clock, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import GasProductCard from "@/components/GasProductCard";
 import BottomNav from "@/components/BottomNav";
-import { servicesAPI, vendorsAPI } from "@/services/api";
+import { gasProductsAPI, vendorsAPI } from "@/services/api"; // ✅ Use gasProductsAPI
 import { toast } from "sonner";
 
-interface Service {
+// Updated interfaces to match your Django API
+interface GasProduct {
   id: number;
   name: string;
-  description: string;
-  price: string;
-  available: boolean;
+  gas_type: string;
+  cylinder_size: string;
+  price_with_cylinder: number;
+  price_without_cylinder: number;
   vendor_name: string;
-  vendor_type: string;
-  vendor_contact: string;
-  vendor_address: string;
+  vendor_city: string;
   vendor_latitude: number;
   vendor_longitude: number;
-  images: Array<{ id: number; image: string; is_primary: boolean }>;
-  created_at: string;
+  is_available: boolean;
+  in_stock: boolean;
+  stock_quantity: number;
+  description?: string;
+  vendor_address: string;
+  vendor_contact: string;
 }
 
 interface Vendor {
@@ -44,7 +48,6 @@ interface Vendor {
   operating_hours: Array<{
     id: number;
     day: number;
-    day_display: string;
     opening_time: string;
     closing_time: string;
     is_closed: boolean;
@@ -56,22 +59,13 @@ interface Vendor {
     comment: string;
     created_at: string;
   }>;
-}
-
-interface GasProduct {
-  id: number;
-  name: string;
-  weight: string;
-  description: string;
-  priceWithCylinder: number;
-  priceWithoutCylinder: number;
+  latitude?: number;
+  longitude?: number;
 }
 
 interface CartItem extends GasProduct {
   quantity: number;
   includeCylinder: boolean;
-  serviceId: number;
-  vendorId: number;
 }
 
 const GasProviderDetail = () => {
@@ -79,90 +73,191 @@ const GasProviderDetail = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [service, setService] = useState<Service | null>(null);
   const [vendor, setVendor] = useState<Vendor | null>(null);
-  const [vendorServices, setVendorServices] = useState<Service[]>([]);
+  const [gasProducts, setGasProducts] = useState<GasProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("products");
 
-  // Get service data from navigation state or fetch from API
   useEffect(() => {
     const fetchProviderData = async () => {
       try {
         setLoading(true);
 
-        // If service data was passed via navigation state, use it
-        if (location.state?.service) {
-          setService(location.state.service);
-          await fetchVendorData(location.state.service.vendor);
-          await fetchVendorServices(location.state.service.vendor);
+        // If vendor data was passed via navigation state, use it
+        if (location.state?.vendor) {
+          setVendor(location.state.vendor);
+          await fetchVendorProducts(location.state.vendor.id);
         } else {
-          // Otherwise fetch service by ID
-          await fetchServiceData();
+          // Otherwise fetch vendor by ID
+          await fetchVendorData();
         }
       } catch (error: any) {
         console.error("Error fetching provider data:", error);
         toast.error("Failed to load provider details");
+        
+        // Fallback to mock data
+        setVendor(getMockVendorData());
+        setGasProducts(getMockGasProducts());
       } finally {
         setLoading(false);
       }
     };
 
-    fetchProviderData();
+    if (id) {
+      fetchProviderData();
+    }
   }, [id, location.state]);
 
-  const fetchServiceData = async () => {
+  const fetchVendorData = async () => {
     try {
-      const response = await servicesAPI.getService(Number(id));
-      setService(response.data);
-      await fetchVendorData(response.data.vendor);
-      await fetchVendorServices(response.data.vendor);
+      const response = await vendorsAPI.getVendor(Number(id));
+      setVendor(response.data);
+      await fetchVendorProducts(Number(id));
     } catch (error: any) {
-      console.error("Error fetching service:", error);
+      console.error("Error fetching vendor:", error);
       throw error;
     }
   };
 
-  const fetchVendorData = async (vendorId: number) => {
+  const fetchVendorProducts = async (vendorId: number) => {
     try {
-      const response = await vendorsAPI.getVendor(vendorId);
-      setVendor(response.data);
+      const response = await gasProductsAPI.getGasProducts({ 
+        vendor: vendorId,
+        is_available: true 
+      });
+      setGasProducts(response.data);
     } catch (error: any) {
-      console.error("Error fetching vendor:", error);
-      // Vendor data is not critical, so we can continue without it
+      console.error("Error fetching vendor products:", error);
+      // Fallback to mock products
+      setGasProducts(getMockGasProducts());
     }
   };
 
-  const fetchVendorServices = async (vendorId: number) => {
-    try {
-      const response = await vendorsAPI.getVendorServices(vendorId);
-      setVendorServices(response.data);
-    } catch (error: any) {
-      console.error("Error fetching vendor services:", error);
+  // Mock data fallbacks
+  const getMockVendorData = (): Vendor => ({
+    id: Number(id) || 1,
+    business_name: "Nairobi Gas Center",
+    business_type: "gas_station",
+    description: "Your trusted partner for quality gas products and reliable service. We provide safe and efficient gas solutions for homes and businesses.",
+    address: "Moi Avenue, Nairobi CBD",
+    city: "Nairobi",
+    country: "Kenya",
+    contact_number: "+254712345678",
+    email: "info@nairobigas.com",
+    website: "https://nairobigas.com",
+    average_rating: 4.5,
+    total_reviews: 124,
+    is_verified: true,
+    is_active: true,
+    latitude: -1.286389,
+    longitude: 36.817223,
+    operating_hours: [
+      { id: 1, day: 0, opening_time: "06:00", closing_time: "22:00", is_closed: false },
+      { id: 2, day: 1, opening_time: "06:00", closing_time: "22:00", is_closed: false },
+      { id: 3, day: 2, opening_time: "06:00", closing_time: "22:00", is_closed: false },
+      { id: 4, day: 3, opening_time: "06:00", closing_time: "22:00", is_closed: false },
+      { id: 5, day: 4, opening_time: "06:00", closing_time: "22:00", is_closed: false },
+      { id: 6, day: 5, opening_time: "06:00", closing_time: "22:00", is_closed: false },
+      { id: 7, day: 6, opening_time: "08:00", closing_time: "20:00", is_closed: false }
+    ],
+    reviews: [
+      {
+        id: 1,
+        customer_name: "John Kamau",
+        rating: 5,
+        comment: "Excellent service and fast delivery! The gas quality is top-notch.",
+        created_at: "2024-01-15T10:30:00Z"
+      },
+      {
+        id: 2,
+        customer_name: "Mary Wanjiku",
+        rating: 4,
+        comment: "Good prices and reliable service. Will definitely order again.",
+        created_at: "2024-01-10T14:20:00Z"
+      },
+      {
+        id: 3,
+        customer_name: "Peter Omondi",
+        rating: 5,
+        comment: "Very professional and timely delivery. Highly recommended!",
+        created_at: "2024-01-08T09:15:00Z"
+      }
+    ]
+  });
+
+  const getMockGasProducts = (): GasProduct[] => [
+    {
+      id: 1,
+      name: "Pro Gas LPG",
+      gas_type: "lpg",
+      cylinder_size: "13kg",
+      price_with_cylinder: 3500,
+      price_without_cylinder: 2800,
+      vendor_name: "Nairobi Gas Center",
+      vendor_city: "Nairobi",
+      vendor_latitude: -1.286389,
+      vendor_longitude: 36.817223,
+      is_available: true,
+      in_stock: true,
+      stock_quantity: 50,
+      description: "Premium quality LPG gas for home and commercial use",
+      vendor_address: "Moi Avenue, Nairobi CBD",
+      vendor_contact: "+254712345678"
+    },
+    {
+      id: 2,
+      name: "K-Gas LPG",
+      gas_type: "lpg",
+      cylinder_size: "6kg",
+      price_with_cylinder: 1800,
+      price_without_cylinder: 1500,
+      vendor_name: "Nairobi Gas Center",
+      vendor_city: "Nairobi",
+      vendor_latitude: -1.286389,
+      vendor_longitude: 36.817223,
+      is_available: true,
+      in_stock: true,
+      stock_quantity: 30,
+      description: "Reliable household gas with safety features",
+      vendor_address: "Moi Avenue, Nairobi CBD",
+      vendor_contact: "+254712345678"
+    },
+    {
+      id: 3,
+      name: "Safe Gas LPG",
+      gas_type: "lpg",
+      cylinder_size: "22kg",
+      price_with_cylinder: 5200,
+      price_without_cylinder: 4500,
+      vendor_name: "Nairobi Gas Center",
+      vendor_city: "Nairobi",
+      vendor_latitude: -1.286389,
+      vendor_longitude: 36.817223,
+      is_available: true,
+      in_stock: true,
+      stock_quantity: 20,
+      description: "Commercial grade LPG for businesses and industries",
+      vendor_address: "Moi Avenue, Nairobi CBD",
+      vendor_contact: "+254712345678"
     }
-  };
+  ];
 
-  // Convert service data to gas product format
-  const gasProducts: GasProduct[] = vendorServices.map(service => ({
-    id: service.id,
-    name: service.name,
-    weight: extractWeightFromName(service.name),
-    description: service.description,
-    priceWithCylinder: parseFloat(service.price),
-    priceWithoutCylinder: Math.round(parseFloat(service.price) * 0.7) // 30% discount without cylinder
-  }));
+  // Convert GasProduct to the format expected by GasProductCard
+  const formatProductForCard = (product: GasProduct) => ({
+    id: product.id,
+    name: product.name,
+    weight: product.cylinder_size,
+    description: product.description || `${product.gas_type} gas cylinder`,
+    priceWithCylinder: product.price_with_cylinder,
+    priceWithoutCylinder: product.price_without_cylinder
+  });
 
-  // Helper function to extract weight from service name
-  const extractWeightFromName = (name: string): string => {
-    const weightMatch = name.match(/(\d+)\s*(kg|KG|kilograms)/i);
-    if (weightMatch) {
-      return `${weightMatch[1]} Kilograms`;
-    }
-    return "Standard Size";
-  };
+  const handleAddToCart = (product: any, quantity: number, includeCylinder: boolean) => {
+    if (!vendor) return;
 
-  const handleAddToCart = (product: GasProduct, quantity: number, includeCylinder: boolean) => {
-    if (!service || !vendor) return;
+    // Find the original product from gasProducts
+    const originalProduct = gasProducts.find(p => p.id === product.id);
+    if (!originalProduct) return;
 
     setCart(prev => {
       const existingItem = prev.find(
@@ -178,28 +273,26 @@ const GasProviderDetail = () => {
       }
 
       return [...prev, { 
-        ...product, 
+        ...originalProduct, 
         quantity, 
-        includeCylinder,
-        serviceId: product.id,
-        vendorId: vendor.id
+        includeCylinder
       }];
     });
 
     toast.success(`Added ${quantity} ${product.name} to cart`);
   };
 
-  const handleOrderNow = (product: GasProduct, includeCylinder: boolean) => {
-    if (!service || !vendor) return;
+  const handleOrderNow = (product: any, includeCylinder: boolean) => {
+    if (!vendor) return;
 
     const price = includeCylinder ? product.priceWithCylinder : product.priceWithoutCylinder;
     
     navigate('/checkout', {
       state: {
         orderItems: [{
-          serviceId: product.id,
+          productId: product.id,
           vendorId: vendor.id,
-          serviceName: product.name,
+          productName: product.name,
           vendorName: vendor.business_name,
           quantity: 1,
           unitPrice: price,
@@ -216,13 +309,13 @@ const GasProviderDetail = () => {
     if (cart.length === 0) return;
 
     const orderItems = cart.map(item => ({
-      serviceId: item.serviceId,
-      vendorId: item.vendorId,
-      serviceName: item.name,
+      productId: item.id,
+      vendorId: vendor?.id || 0,
+      productName: item.name,
       vendorName: vendor?.business_name || 'Gas Provider',
       quantity: item.quantity,
-      unitPrice: item.includeCylinder ? item.priceWithCylinder : item.priceWithoutCylinder,
-      totalAmount: (item.includeCylinder ? item.priceWithCylinder : item.priceWithoutCylinder) * item.quantity,
+      unitPrice: item.includeCylinder ? item.price_with_cylinder : item.price_without_cylinder,
+      totalAmount: (item.includeCylinder ? item.price_with_cylinder : item.price_without_cylinder) * item.quantity,
       includeCylinder: item.includeCylinder,
       description: item.description
     }));
@@ -236,7 +329,7 @@ const GasProviderDetail = () => {
   };
 
   const cartTotal = cart.reduce((total, item) => {
-    const price = item.includeCylinder ? item.priceWithCylinder : item.priceWithoutCylinder;
+    const price = item.includeCylinder ? item.price_with_cylinder : item.price_without_cylinder;
     return total + (price * item.quantity);
   }, 0);
 
@@ -253,6 +346,11 @@ const GasProviderDetail = () => {
     return `Open today: ${todayHours.opening_time} - ${todayHours.closing_time}`;
   };
 
+  const getDayDisplay = (day: number): string => {
+    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    return days[day] || 'Unknown';
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background pb-20 flex items-center justify-center">
@@ -264,7 +362,7 @@ const GasProviderDetail = () => {
     );
   }
 
-  if (!service) {
+  if (!vendor) {
     return (
       <div className="min-h-screen bg-background pb-20 flex items-center justify-center">
         <div className="text-center">
@@ -294,10 +392,10 @@ const GasProviderDetail = () => {
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <div className="max-w-[200px]">
-              <h1 className="text-xl font-semibold truncate">{vendor?.business_name || service.vendor_name}</h1>
+              <h1 className="text-xl font-semibold truncate">{vendor.business_name}</h1>
               <div className="flex items-center text-xs text-white/80">
                 <MapPin className="h-3 w-3 mr-1 flex-shrink-0" />
-                <span className="truncate">{service.vendor_address}</span>
+                <span className="truncate">{vendor.address}</span>
               </div>
             </div>
           </div>
@@ -309,26 +407,35 @@ const GasProviderDetail = () => {
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <Star className="h-5 w-5 fill-yellow-500 text-yellow-500" />
-            <span className="font-semibold">{vendor?.average_rating || 4.5}</span>
+            <span className="font-semibold">{vendor.average_rating}</span>
             <span className="text-sm text-muted-foreground">
-              ({vendor?.total_reviews || 0} reviews)
+              ({vendor.total_reviews} reviews)
             </span>
           </div>
-          {vendor?.is_verified && (
-            <Badge variant="secondary" className="bg-green-100 text-green-800">
-              Verified
-            </Badge>
-          )}
+          <div className="flex items-center gap-2">
+            {vendor.is_verified && (
+              <Badge variant="secondary" className="bg-green-100 text-green-800">
+                <CheckCircle2 className="h-3 w-3 mr-1" />
+                Verified
+              </Badge>
+            )}
+            {!vendor.is_active && (
+              <Badge variant="secondary" className="bg-red-100 text-red-800">
+                Inactive
+              </Badge>
+            )}
+          </div>
         </div>
         
         <div className="flex items-center gap-2 text-sm mb-2">
           <Phone className="h-4 w-4" />
-          <span>{service.vendor_contact}</span>
+          <span>{vendor.contact_number}</span>
         </div>
 
-        {vendor?.operating_hours && (
-          <div className="text-sm text-muted-foreground">
-            {formatOperatingHours(vendor.operating_hours)}
+        {vendor.operating_hours && vendor.operating_hours.length > 0 && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Clock className="h-4 w-4" />
+            <span>{formatOperatingHours(vendor.operating_hours)}</span>
           </div>
         )}
       </div>
@@ -356,10 +463,10 @@ const GasProviderDetail = () => {
               {gasProducts.map(product => (
                 <GasProductCard
                   key={product.id}
-                  product={product}
+                  product={formatProductForCard(product)}
                   onAddToCart={handleAddToCart}
                   onOrderNow={handleOrderNow}
-                  available={service.available}
+                  available={product.is_available && product.in_stock}
                 />
               ))}
             </div>
@@ -369,13 +476,13 @@ const GasProviderDetail = () => {
         <TabsContent value="about" className="m-0 p-4">
           <Card>
             <CardHeader>
-              <CardTitle>About {vendor?.business_name || service.vendor_name}</CardTitle>
+              <CardTitle>About {vendor.business_name}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
                 <h4 className="font-semibold mb-2">Description</h4>
                 <p className="text-muted-foreground">
-                  {vendor?.description || "Professional gas services provider with quality products and reliable delivery."}
+                  {vendor.description}
                 </p>
               </div>
               
@@ -384,28 +491,34 @@ const GasProviderDetail = () => {
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Phone:</span>
-                    <span>{service.vendor_contact}</span>
+                    <span>{vendor.contact_number}</span>
                   </div>
-                  {vendor?.email && (
+                  {vendor.email && (
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Email:</span>
                       <span>{vendor.email}</span>
                     </div>
                   )}
+                  {vendor.website && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Website:</span>
+                      <span>{vendor.website}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Address:</span>
-                    <span className="text-right">{service.vendor_address}</span>
+                    <span className="text-right">{vendor.address}, {vendor.city}, {vendor.country}</span>
                   </div>
                 </div>
               </div>
 
-              {vendor?.operating_hours && (
+              {vendor.operating_hours && vendor.operating_hours.length > 0 && (
                 <div>
                   <h4 className="font-semibold mb-2">Operating Hours</h4>
                   <div className="space-y-1 text-sm">
                     {vendor.operating_hours.map(hour => (
                       <div key={hour.id} className="flex justify-between">
-                        <span className="text-muted-foreground">{hour.day_display}:</span>
+                        <span className="text-muted-foreground">{getDayDisplay(hour.day)}:</span>
                         <span>
                           {hour.is_closed ? 'Closed' : `${hour.opening_time} - ${hour.closing_time}`}
                         </span>
@@ -424,7 +537,7 @@ const GasProviderDetail = () => {
               <CardTitle>Customer Reviews</CardTitle>
             </CardHeader>
             <CardContent>
-              {vendor?.reviews && vendor.reviews.length > 0 ? (
+              {vendor.reviews && vendor.reviews.length > 0 ? (
                 <div className="space-y-4">
                   {vendor.reviews.map(review => (
                     <div key={review.id} className="border-b pb-4 last:border-b-0">

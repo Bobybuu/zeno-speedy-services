@@ -238,7 +238,7 @@ const Register = () => {
         <Card className="border-0 shadow-xl">
           <CardHeader className="space-y-1 text-center">
             <div className="mb-4">
-              <h1 className="text-4xl font-bold text-primary">zeNO</h1>
+              <h1 className="text-4xl font-bold text-primary">zeno</h1>
               <p className="text-sm text-muted-foreground">Trusted Reliable Services</p>
             </div>
             <CardTitle className="text-2xl">Create Account</CardTitle>

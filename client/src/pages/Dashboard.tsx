@@ -8,24 +8,23 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import ServiceCard from "@/components/ServiceCard";
 import BottomNav from "@/components/BottomNav";
 import { motion } from "framer-motion";
-import { servicesAPI, vendorsAPI } from "@/services/api";
+import { servicesAPI, vendorsAPI, gasProductsAPI } from "@/services/api"; // ✅ ADD gasProductsAPI
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 
-interface Service {
+interface GasProduct {
   id: number;
   name: string;
-  description: string;
-  price: string;
-  available: boolean;
+  gas_type: string;
+  cylinder_size: string;
+  price_with_cylinder: number;
+  price_without_cylinder: number;
   vendor_name: string;
-  vendor_type: string;
-  vendor_contact: string;
-  vendor_address: string;
+  vendor_city: string;
   vendor_latitude: number;
   vendor_longitude: number;
-  images: Array<{ id: number; image: string; is_primary: boolean }>;
-  created_at: string;
+  is_available: boolean;
+  in_stock: boolean;
 }
 
 interface Vendor {
@@ -35,14 +34,17 @@ interface Vendor {
   average_rating: number;
   total_reviews: number;
   address: string;
+  city: string;
   contact_number: string;
+  latitude: number;
+  longitude: number;
 }
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const { currentUser } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
-  const [gasServices, setGasServices] = useState<Service[]>([]);
+  const [gasProducts, setGasProducts] = useState<GasProduct[]>([]);
   const [recentVendors, setRecentVendors] = useState<Vendor[]>([]);
   const [loading, setLoading] = useState(true);
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
@@ -84,6 +86,7 @@ const Dashboard = () => {
         },
         (error) => {
           console.error("Error getting location:", error);
+          toast.info("Enable location for better results");
         }
       );
     }
@@ -94,87 +97,58 @@ const Dashboard = () => {
     const fetchDashboardData = async () => {
       try {
         setLoading(true);
+        console.log("Fetching dashboard data...");
 
-        // Fetch gas services
+        // Fetch gas products instead of services - ✅ FIXED: Use gasProductsAPI
         const gasFilters: any = {
-          category__name: 'gas',
-          available: true
+          is_available: true,
+          vendor__is_verified: true
         };
 
         if (userLocation) {
           gasFilters.lat = userLocation[0];
           gasFilters.lng = userLocation[1];
-          gasFilters.radius = 10; // 10km radius
+          gasFilters.radius = 10;
         }
 
-        const servicesResponse = await servicesAPI.getServices(gasFilters);
-        setGasServices(servicesResponse.data.slice(0, 4)); // Show only 4 services
+        const [gasResponse, vendorsResponse] = await Promise.allSettled([
+          gasProductsAPI.getGasProducts(gasFilters), // ✅ FIXED: Use gasProductsAPI
+          vendorsAPI.getVendors({ 
+            business_type: 'gas_station',
+            is_verified: true,
+            is_active: true 
+          })
+        ]);
 
-        // Fetch recent vendors
-        const vendorsResponse = await vendorsAPI.getVendors({
-          business_type: 'gas_station',
-          
-        });
-        setRecentVendors(vendorsResponse.data.slice(0, 4)); // Show only 4 vendors
+        // Handle gas products response
+        if (gasResponse.status === 'fulfilled') {
+          console.log("Gas products loaded:", gasResponse.value.data);
+          setGasProducts(gasResponse.value.data.slice(0, 4));
+        } else {
+          console.error("Failed to fetch gas products:", gasResponse.reason);
+          // Use fallback mock data for gas products
+          setGasProducts(getMockGasProducts());
+        }
+
+        // Handle vendors response
+        if (vendorsResponse.status === 'fulfilled') {
+          console.log("Vendors loaded:", vendorsResponse.value.data);
+          setRecentVendors(vendorsResponse.value.data.slice(0, 4));
+        } else {
+          console.error("Failed to fetch vendors:", vendorsResponse.reason);
+          // Use fallback mock data for vendors
+          setRecentVendors(getMockVendors());
+        }
 
       } catch (error: any) {
         console.error("Error fetching dashboard data:", error);
-        toast.error("Failed to load dashboard data");
         
-        // Fallback mock data
-        setGasServices([
-          {
-            id: 1,
-            name: "6KG Gas Refill",
-            description: "Premium quality 6KG gas refill",
-            price: "3500.00",
-            available: true,
-            vendor_name: "Gas Refiller 1",
-            vendor_type: "gas_station",
-            vendor_contact: "+254712345678",
-            vendor_address: "Westlands, Nairobi",
-            vendor_latitude: -1.2921,
-            vendor_longitude: 36.8219,
-            images: [],
-            created_at: "2024-01-01T00:00:00Z"
-          },
-          {
-            id: 2,
-            name: "13KG Gas Refill",
-            description: "Standard 13KG gas cylinder refill",
-            price: "5200.00",
-            available: true,
-            vendor_name: "Gas Refiller 2",
-            vendor_type: "gas_station",
-            vendor_contact: "+254712345679",
-            vendor_address: "Kilimani, Nairobi",
-            vendor_latitude: -1.2841,
-            vendor_longitude: 36.8170,
-            images: [],
-            created_at: "2024-01-01T00:00:00Z"
-          }
-        ]);
-
-        setRecentVendors([
-          {
-            id: 1,
-            business_name: "Gas Refiller 1",
-            business_type: "gas_station",
-            average_rating: 4.5,
-            total_reviews: 124,
-            address: "Westlands, Nairobi",
-            contact_number: "+254712345678"
-          },
-          {
-            id: 2,
-            business_name: "Gas Refiller 2",
-            business_type: "gas_station",
-            average_rating: 4.8,
-            total_reviews: 89,
-            address: "Kilimani, Nairobi",
-            contact_number: "+254712345679"
-          }
-        ]);
+        // Use comprehensive fallback data
+        setGasProducts(getMockGasProducts());
+        setRecentVendors(getMockVendors());
+        
+        toast.error("Using demo data - API connection failed");
+        
       } finally {
         setLoading(false);
       }
@@ -183,8 +157,119 @@ const Dashboard = () => {
     fetchDashboardData();
   }, [userLocation]);
 
+  // Mock data fallbacks
+  const getMockGasProducts = (): GasProduct[] => [
+    {
+      id: 1,
+      name: "Pro Gas LPG",
+      gas_type: "lpg",
+      cylinder_size: "13kg",
+      price_with_cylinder: 3500,
+      price_without_cylinder: 2800,
+      vendor_name: "Nairobi Gas Center",
+      vendor_city: "Nairobi",
+      vendor_latitude: -1.286389,
+      vendor_longitude: 36.817223,
+      is_available: true,
+      in_stock: true
+    },
+    {
+      id: 2,
+      name: "K-Gas LPG",
+      gas_type: "lpg",
+      cylinder_size: "6kg",
+      price_with_cylinder: 1800,
+      price_without_cylinder: 1500,
+      vendor_name: "Westlands Gas Shop",
+      vendor_city: "Nairobi",
+      vendor_latitude: -1.266667,
+      vendor_longitude: 36.800000,
+      is_available: true,
+      in_stock: true
+    },
+    {
+      id: 3,
+      name: "Safe Gas LPG",
+      gas_type: "lpg",
+      cylinder_size: "22kg",
+      price_with_cylinder: 5200,
+      price_without_cylinder: 4500,
+      vendor_name: "Kilimani Gas Depot",
+      vendor_city: "Nairobi",
+      vendor_latitude: -1.300000,
+      vendor_longitude: 36.783333,
+      is_available: true,
+      in_stock: true
+    },
+    {
+      id: 4,
+      name: "Quick Gas LPG",
+      gas_type: "lpg",
+      cylinder_size: "13kg",
+      price_with_cylinder: 3400,
+      price_without_cylinder: 2700,
+      vendor_name: "CBD Gas Station",
+      vendor_city: "Nairobi",
+      vendor_latitude: -1.283333,
+      vendor_longitude: 36.816667,
+      is_available: true,
+      in_stock: true
+    }
+  ];
+
+  const getMockVendors = (): Vendor[] => [
+    {
+      id: 1,
+      business_name: "Nairobi Gas Center",
+      business_type: "gas_station",
+      average_rating: 4.5,
+      total_reviews: 124,
+      address: "Moi Avenue, Nairobi CBD",
+      city: "Nairobi",
+      contact_number: "+254712345678",
+      latitude: -1.286389,
+      longitude: 36.817223
+    },
+    {
+      id: 2,
+      business_name: "Westlands Gas Shop",
+      business_type: "gas_station",
+      average_rating: 4.2,
+      total_reviews: 89,
+      address: "Westlands Mall, Nairobi",
+      city: "Nairobi",
+      contact_number: "+254723456789",
+      latitude: -1.266667,
+      longitude: 36.800000
+    },
+    {
+      id: 3,
+      business_name: "Kilimani Gas Depot",
+      business_type: "gas_station",
+      average_rating: 4.7,
+      total_reviews: 156,
+      address: "Argwings Kodhek Road, Kilimani",
+      city: "Nairobi",
+      contact_number: "+254734567890",
+      latitude: -1.300000,
+      longitude: 36.783333
+    },
+    {
+      id: 4,
+      business_name: "CBD Gas Station",
+      business_type: "gas_station",
+      average_rating: 4.0,
+      total_reviews: 67,
+      address: "Tom Mboya Street, Nairobi",
+      city: "Nairobi",
+      contact_number: "+254745678901",
+      latitude: -1.283333,
+      longitude: 36.816667
+    }
+  ];
+
   const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): string => {
-    if (!lat1 || !lon1) return "Nearby";
+    if (!lat1 || !lon1 || !lat2 || !lon2) return "Nearby";
     
     const R = 6371; // Earth's radius in km
     const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -199,8 +284,8 @@ const Dashboard = () => {
     return distance < 1 ? `${Math.round(distance * 1000)}m` : `${distance.toFixed(1)}km`;
   };
 
-  const formatPrice = (price: string) => {
-    return `KSh ${parseFloat(price).toLocaleString()}`;
+  const formatPrice = (price: number) => {
+    return `KSh ${price.toLocaleString()}`;
   };
 
   const getUserInitials = () => {
@@ -219,8 +304,8 @@ const Dashboard = () => {
     return currentUser.username || "User";
   };
 
-  const handleServiceClick = (service: Service) => {
-    navigate(`/provider/${service.id}`, { state: { service } });
+  const handleProductClick = (product: GasProduct) => {
+    navigate(`/gas-product/${product.id}`, { state: { product } });
   };
 
   const handleVendorClick = (vendor: Vendor) => {
@@ -240,7 +325,7 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen bg-background pb-20">
-      {/* Header */}
+      {/* Header - Same as before */}
       <header className="sticky top-0 z-40 bg-primary text-white shadow-lg">
         <div className="flex items-center justify-between p-4">
           <div className="flex items-center gap-3">
@@ -322,10 +407,10 @@ const Dashboard = () => {
         </div>
       </section>
 
-      {/* Gas Services Section */}
+      {/* Gas Products Section */}
       <section className="p-4">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold">Gas Services Near You</h2>
+          <h2 className="text-lg font-semibold">Gas Products Near You</h2>
           <Button 
             variant="link" 
             className="text-secondary p-0 h-auto font-semibold"
@@ -335,64 +420,64 @@ const Dashboard = () => {
           </Button>
         </div>
 
-        {gasServices.length === 0 ? (
+        {gasProducts.length === 0 ? (
           <Card className="p-8 text-center">
             <div className="text-6xl mb-4">🔥</div>
-            <h3 className="text-lg font-semibold mb-2">No gas services found</h3>
+            <h3 className="text-lg font-semibold mb-2">No gas products found</h3>
             <p className="text-muted-foreground mb-4">
               {userLocation 
-                ? "No gas services available in your area yet" 
-                : "Enable location services to see nearby providers"
+                ? "No gas products available in your area yet" 
+                : "Enable location services to see nearby products"
               }
             </p>
             <Button onClick={() => navigate("/services/gas")}>
-              Browse All Gas Services
+              Browse All Gas Products
             </Button>
           </Card>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {gasServices.map((service, index) => (
+            {gasProducts.map((product, index) => (
               <motion.div
-                key={service.id}
+                key={product.id}
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: index * 0.05 }}
               >
                 <Card 
                   className="p-3 cursor-pointer hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border-2 border-transparent hover:border-orange-200"
-                  onClick={() => handleServiceClick(service)}
+                  onClick={() => handleProductClick(product)}
                 >
                   <div className="aspect-square bg-gradient-to-br from-orange-100 to-orange-50 rounded-lg mb-2 flex items-center justify-center">
                     <span className="text-3xl">🔥</span>
                   </div>
-                  <h3 className="font-medium text-sm truncate">{service.vendor_name}</h3>
-                  <p className="text-xs text-muted-foreground truncate">{service.name}</p>
-                  {userLocation && (
+                  <h3 className="font-medium text-sm truncate">{product.name}</h3>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {product.cylinder_size} • {product.vendor_name}
+                  </p>
+                  {userLocation && product.vendor_latitude && product.vendor_longitude && (
                     <p className="text-xs text-muted-foreground mt-1">
                       {calculateDistance(
                         userLocation[0], 
                         userLocation[1], 
-                        service.vendor_latitude, 
-                        service.vendor_longitude
+                        product.vendor_latitude, 
+                        product.vendor_longitude
                       )}
                     </p>
                   )}
                   <div className="flex items-center justify-between mt-2">
                     <span className="text-xs font-semibold text-primary">
-                      {formatPrice(service.price)}
+                      {formatPrice(product.price_with_cylinder)}
                     </span>
-                    <div className="flex items-center">
-                      <span className="text-xs text-yellow-500">⭐</span>
-                      <span className="text-xs ml-1">4.5</span>
-                    </div>
-                  </div>
-                  {!service.available && (
-                    <div className="mt-2">
-                      <span className="text-xs bg-red-100 text-red-800 px-1 py-0.5 rounded">
-                        Unavailable
+                    {product.in_stock ? (
+                      <span className="text-xs bg-green-100 text-green-800 px-1 py-0.5 rounded">
+                        In Stock
                       </span>
-                    </div>
-                  )}
+                    ) : (
+                      <span className="text-xs bg-red-100 text-red-800 px-1 py-0.5 rounded">
+                        Out of Stock
+                      </span>
+                    )}
+                  </div>
                 </Card>
               </motion.div>
             ))}

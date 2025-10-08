@@ -1,4 +1,4 @@
-// src/services/api.ts
+// src/services/api.tsx
 import axios from 'axios';
 
 const API_BASE_URL = 'http://localhost:8000/api';
@@ -149,12 +149,205 @@ export interface VendorFilters {
   lat?: number;
   lng?: number;
   radius?: number;
+  is_verified?: boolean;
+  is_active?: boolean;
+  city?: string;
 }
 
 export interface OrderFilters {
   status?: string;
   customer?: number;
   vendor?: number;
+}
+
+// Gas Products Types
+export interface GasProduct {
+  id: number;
+  name: string;
+  gas_type: string;
+  cylinder_size: string;
+  brand: string;
+  price_with_cylinder: number;
+  price_without_cylinder: number;
+  cylinder_deposit?: number;
+  stock_quantity: number;
+  min_stock_alert: number;
+  description?: string;
+  ingredients?: string;
+  safety_instructions?: string;
+  is_available: boolean;
+  is_active: boolean;
+  featured: boolean;
+  in_stock: boolean;
+  low_stock: boolean;
+  vendor: number;
+  vendor_name: string;
+  vendor_city: string;
+  vendor_latitude?: number;
+  vendor_longitude?: number;
+  images: Array<{
+    id: number;
+    image: string;
+    alt_text: string;
+    is_primary: boolean;
+  }>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GasProductCreateData {
+  name: string;
+  gas_type: string;
+  cylinder_size: string;
+  brand?: string;
+  price_with_cylinder: number;
+  price_without_cylinder: number;
+  stock_quantity: number;
+  min_stock_alert?: number;
+  description?: string;
+  ingredients?: string;
+  safety_instructions?: string;
+  featured?: boolean;
+}
+
+export interface GasProductUpdateData {
+  name?: string;
+  brand?: string;
+  price_with_cylinder?: number;
+  price_without_cylinder?: number;
+  stock_quantity?: number;
+  min_stock_alert?: number;
+  description?: string;
+  ingredients?: string;
+  safety_instructions?: string;
+  is_active?: boolean;
+  featured?: boolean;
+}
+
+export interface GasProductFilters {
+  gas_type?: string;
+  cylinder_size?: string;
+  vendor?: number;
+  is_available?: boolean;
+  featured?: boolean;
+  min_price?: number;
+  max_price?: number;
+  city?: string;
+  lat?: number;
+  lng?: number;
+  radius?: number;
+  vendor__is_verified?: boolean;
+}
+
+export interface Vendor {
+  id: number;
+  user: number;
+  business_name: string;
+  business_type: string;
+  description?: string;
+  latitude?: number;
+  longitude?: number;
+  address: string;
+  city: string;
+  country: string;
+  contact_number: string;
+  email?: string;
+  website?: string;
+  opening_hours?: string;
+  is_verified: boolean;
+  is_active: boolean;
+  average_rating: number;
+  total_reviews: number;
+  delivery_radius_km: number;
+  min_order_amount: number;
+  delivery_fee: number;
+  total_gas_products?: number;
+  available_gas_products?: number;
+  operating_hours: Array<{
+    id: number;
+    day: number;
+    opening_time: string;
+    closing_time: string;
+    is_closed: boolean;
+  }>;
+  reviews: Array<{
+    id: number;
+    customer: number;
+    customer_name: string;
+    rating: number;
+    comment: string;
+    created_at: string;
+  }>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VendorCreateData {
+  business_name: string;
+  business_type: string;
+  description?: string;
+  latitude?: number;
+  longitude?: number;
+  address: string;
+  city: string;
+  country?: string;
+  contact_number: string;
+  email?: string;
+  website?: string;
+  delivery_radius_km?: number;
+  min_order_amount?: number;
+  delivery_fee?: number;
+}
+
+export interface VendorUpdateData {
+  business_name?: string;
+  description?: string;
+  latitude?: number;
+  longitude?: number;
+  address?: string;
+  city?: string;
+  contact_number?: string;
+  email?: string;
+  website?: string;
+  opening_hours?: string;
+  delivery_radius_km?: number;
+  min_order_amount?: number;
+  delivery_fee?: number;
+}
+
+export interface VendorReviewData {
+  rating: number;
+  comment?: string;
+}
+
+export interface OperatingHoursData {
+  day: number;
+  opening_time: string;
+  closing_time: string;
+  is_closed?: boolean;
+}
+
+export interface CartItem {
+  product_id: number;
+  quantity: number;
+  include_cylinder: boolean;
+  product?: GasProduct;
+}
+
+export interface OrderItem {
+  product: number;
+  quantity: number;
+  unit_price: number;
+  include_cylinder: boolean;
+}
+
+export interface CreateOrderData {
+  vendor: number;
+  items: OrderItem[];
+  delivery_address?: string;
+  delivery_latitude?: number;
+  delivery_longitude?: number;
+  special_instructions?: string;
 }
 
 // Auth API
@@ -185,20 +378,95 @@ export const servicesAPI = {
 
 // Vendors API
 export const vendorsAPI = {
-  getVendors: (filters?: VendorFilters) => api.get('/vendors/', { params: filters }),
-  getVendor: (id: number) => api.get(`/vendors/${id}/`),
-  registerVendor: (data: any) => api.post('/vendors/register/', data),
-  updateVendor: (id: number, data: any) => api.put(`/vendors/${id}/`, data),
-  getVendorServices: (vendorId: number) => api.get(`/vendors/${vendorId}/services/`),
+  // Vendor management
+  getVendors: (filters?: VendorFilters) => api.get('/vendors/vendors/', { params: filters }),
+  getVendor: (id: number) => api.get(`/vendors/vendors/${id}/`),
+  getMyVendor: () => api.get('/vendors/vendors/my_vendor/'),
+  registerVendor: (data: VendorCreateData) => api.post('/vendors/vendors/', data),
+  updateVendor: (id: number, data: VendorUpdateData) => api.patch(`/vendors/vendors/${id}/`, data),
+  getVendorDashboard: () => api.get('/vendors/vendors/my_vendor/vendor_dashboard/'),
+  
+  // Vendor location and discovery
+  getNearbyVendors: (lat: number, lng: number, radius: number = 10, business_type?: string) => 
+    api.get('/vendors/vendors/nearby_vendors/', { 
+      params: { lat, lng, radius, business_type } 
+    }),
+  
+  // Vendor with products
+  getVendorWithProducts: (id: number) => api.get(`/vendors/vendors/${id}/vendor_with_products/`),
+  
+  // Reviews
+  getVendorReviews: (vendorId: number) => api.get(`/vendors/reviews/vendor_reviews/?vendor=${vendorId}`),
+  createReview: (vendorId: number, data: VendorReviewData) => api.post('/vendors/reviews/', { ...data, vendor: vendorId }),
+  updateReview: (reviewId: number, data: VendorReviewData) => api.put(`/vendors/reviews/${reviewId}/`, data),
+  deleteReview: (reviewId: number) => api.delete(`/vendors/reviews/${reviewId}/`),
+  
+  // Operating hours
+  getOperatingHours: (vendorId: number) => api.get('/vendors/operating-hours/', { params: { vendor: vendorId } }),
+  createOperatingHours: (data: OperatingHoursData) => api.post('/vendors/operating-hours/', data),
+  updateOperatingHours: (id: number, data: OperatingHoursData) => api.put(`/vendors/operating-hours/${id}/`, data),
+  deleteOperatingHours: (id: number) => api.delete(`/vendors/operating-hours/${id}/`),
+};
+
+// Gas Products API
+export const gasProductsAPI = {
+  // Product management
+  getGasProducts: (filters?: GasProductFilters) => api.get('/vendors/gas-products/', { params: filters }),
+  getGasProduct: (id: number) => api.get(`/vendors/gas-products/${id}/`),
+  createGasProduct: (data: GasProductCreateData) => api.post('/vendors/gas-products/', data),
+  updateGasProduct: (id: number, data: GasProductUpdateData) => api.patch(`/vendors/gas-products/${id}/`, data),
+  deleteGasProduct: (id: number) => api.delete(`/vendors/gas-products/${id}/`),
+  
+  // Vendor-specific products
+  getMyProducts: () => api.get('/vendors/gas-products/my_products/'),
+  
+  // Product actions
+  updateStock: (id: number, stockQuantity: number, minStockAlert?: number) => 
+    api.patch(`/vendors/gas-products/${id}/update_stock/`, { stock_quantity: stockQuantity, min_stock_alert: minStockAlert }),
+  
+  toggleAvailability: (id: number) => 
+    api.post(`/vendors/gas-products/${id}/toggle_availability/`),
+  
+  // Product discovery
+  getFeaturedProducts: () => api.get('/vendors/gas-products/featured_products/'),
+  
+  searchProducts: (query: string, filters?: GasProductFilters) => 
+    api.get('/vendors/gas-products/search_products/', { 
+      params: { search: query, ...filters } 
+    }),
+  
+  // Product images
+  uploadProductImage: (productId: number, imageFile: File, altText?: string, isPrimary?: boolean) => {
+    const formData = new FormData();
+    formData.append('product', productId.toString());
+    formData.append('image', imageFile);
+    if (altText) formData.append('alt_text', altText);
+    if (isPrimary) formData.append('is_primary', isPrimary.toString());
+    
+    return api.post('/vendors/product-images/', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+  },
+  
+  deleteProductImage: (imageId: number) => api.delete(`/vendors/product-images/${imageId}/`),
+  setPrimaryImage: (imageId: number) => api.post(`/vendors/product-images/${imageId}/set_primary/`),
 };
 
 // Orders API
 export const ordersAPI = {
   getOrders: (filters?: OrderFilters) => api.get('/orders/', { params: filters }),
   getOrder: (id: number) => api.get(`/orders/${id}/`),
-  createOrder: (data: any) => api.post('/orders/', data),
+  createOrder: (data: CreateOrderData) => api.post('/orders/', data),
   updateOrder: (id: number, data: any) => api.put(`/orders/${id}/`, data),
   cancelOrder: (id: number) => api.post(`/orders/${id}/cancel/`),
+  
+  // Customer orders
+  getMyOrders: () => api.get('/orders/my_orders/'),
+  
+  // Vendor orders
+  getVendorOrders: () => api.get('/orders/vendor_orders/'),
+  updateOrderStatus: (orderId: number, status: string) => 
+    api.patch(`/orders/${orderId}/update_status/`, { status }),
 };
 
 // Payments API
@@ -206,6 +474,77 @@ export const paymentsAPI = {
   createPayment: (data: any) => api.post('/payments/', data),
   getPayment: (id: number) => api.get(`/payments/${id}/`),
   verifyPayment: (id: number) => api.post(`/payments/${id}/verify/`),
+  
+  // Order payments
+  createOrderPayment: (orderId: number, paymentMethod: string) => 
+    api.post('/payments/create_order_payment/', { order: orderId, payment_method: paymentMethod }),
+};
+
+// Cart API (local storage based, but could be API-based)
+export const cartAPI = {
+  getCart: () => {
+    const cart = localStorage.getItem('cart');
+    return cart ? JSON.parse(cart) : [];
+  },
+  
+  addToCart: (item: CartItem) => {
+    const cart = cartAPI.getCart();
+    const existingItemIndex = cart.findIndex((cartItem: CartItem) => 
+      cartItem.product_id === item.product_id && cartItem.include_cylinder === item.include_cylinder
+    );
+    
+    if (existingItemIndex > -1) {
+      cart[existingItemIndex].quantity += item.quantity;
+    } else {
+      cart.push(item);
+    }
+    
+    localStorage.setItem('cart', JSON.stringify(cart));
+    return cart;
+  },
+  
+  updateCartItem: (productId: number, includeCylinder: boolean, quantity: number) => {
+    const cart = cartAPI.getCart();
+    const itemIndex = cart.findIndex((item: CartItem) => 
+      item.product_id === productId && item.include_cylinder === includeCylinder
+    );
+    
+    if (itemIndex > -1) {
+      if (quantity <= 0) {
+        cart.splice(itemIndex, 1);
+      } else {
+        cart[itemIndex].quantity = quantity;
+      }
+    }
+    
+    localStorage.setItem('cart', JSON.stringify(cart));
+    return cart;
+  },
+  
+  removeFromCart: (productId: number, includeCylinder: boolean) => {
+    const cart = cartAPI.getCart();
+    const filteredCart = cart.filter((item: CartItem) => 
+      !(item.product_id === productId && item.include_cylinder === includeCylinder)
+    );
+    
+    localStorage.setItem('cart', JSON.stringify(filteredCart));
+    return filteredCart;
+  },
+  
+  clearCart: () => {
+    localStorage.removeItem('cart');
+    return [];
+  },
+  
+  getCartTotal: () => {
+    const cart = cartAPI.getCart();
+    return cart.reduce((total: number, item: CartItem) => {
+      const price = item.include_cylinder ? 
+        (item.product?.price_with_cylinder || 0) : 
+        (item.product?.price_without_cylinder || 0);
+      return total + (price * item.quantity);
+    }, 0);
+  },
 };
 
 // Utility functions
@@ -224,6 +563,22 @@ export const clearAuthData = (): void => {
   localStorage.removeItem('temp_access_token');
   localStorage.removeItem('temp_refresh_token');
   localStorage.removeItem('temp_user');
+};
+
+// Helper function for file uploads
+export const uploadFile = (file: File, uploadUrl: string, onProgress?: (progress: number) => void) => {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  return api.post(uploadUrl, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    onUploadProgress: (progressEvent) => {
+      if (onProgress && progressEvent.total) {
+        const progress = (progressEvent.loaded / progressEvent.total) * 100;
+        onProgress(progress);
+      }
+    },
+  });
 };
 
 export default api;
