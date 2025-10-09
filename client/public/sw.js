@@ -10,15 +10,11 @@ const STATIC_ASSETS = [
   '/favicon.ico',
   '/favicon-96x96.png',
   '/favicon.svg',
-  '/apple-touch-icon.png'
-];
-
-// Assets to cache on demand
-const DYNAMIC_ASSETS = [
+  '/apple-touch-icon.png',
   '/android-chrome-192x192.png',
   '/android-chrome-512x512.png',
-  '/screenshot-mobile.png',
-  '/screenshot-tablet.png'
+  '/web-app-manifest-192x192.png',
+  '/web-app-manifest-512x512.png'
 ];
 
 // Install event - cache static assets
@@ -29,7 +25,7 @@ self.addEventListener('install', (event) => {
     caches.open(CACHE_NAME)
       .then((cache) => {
         console.log(`${APP_PREFIX} Service Worker: Caching static assets`);
-        return cache.addAll(STATIC_ASSETS);
+        return cache.addAll(STATIC_ASSETS.map(url => new Request(url, { credentials: 'same-origin' })));
       })
       .then(() => {
         console.log(`${APP_PREFIX} Service Worker: Installation complete`);
@@ -64,8 +60,8 @@ self.addEventListener('activate', (event) => {
 
 // Fetch event - serve from cache or network
 self.addEventListener('fetch', (event) => {
-  // Skip non-GET requests and cross-origin requests
-  if (event.request.method !== 'GET' || !event.request.url.startsWith(self.location.origin)) {
+  // Skip non-GET requests
+  if (event.request.method !== 'GET') {
     return;
   }
 
@@ -80,17 +76,26 @@ self.addEventListener('fetch', (event) => {
         // Otherwise fetch from network
         return fetch(event.request)
           .then((networkResponse) => {
-            // Cache dynamic assets on demand
-            if (DYNAMIC_ASSETS.some(asset => event.request.url.includes(asset))) {
-              caches.open(CACHE_NAME)
-                .then((cache) => {
-                  cache.put(event.request, networkResponse.clone());
-                });
+            // Check if we received a valid response
+            if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
+              return networkResponse;
             }
+
+            // Clone the response before using it
+            const responseToCache = networkResponse.clone();
+
+            // Cache the new response
+            caches.open(CACHE_NAME)
+              .then((cache) => {
+                cache.put(event.request, responseToCache);
+              });
+
             return networkResponse;
           })
-          .catch(() => {
-            // If both cache and network fail, show offline page for navigation requests
+          .catch((error) => {
+            console.error(`${APP_PREFIX} Fetch failed:`, error);
+            
+            // If both cache and network fail, return offline response
             if (event.request.destination === 'document') {
               return caches.match('/offline.html');
             }
@@ -98,8 +103,13 @@ self.addEventListener('fetch', (event) => {
             // For images, return a placeholder
             if (event.request.destination === 'image') {
               return new Response(
-                '<svg width="200" height="200" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="#f3f4f6"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="Arial" font-size="14" fill="#9ca3af">Image not available offline</text></svg>',
-                { headers: { 'Content-Type': 'image/svg+xml' } }
+                '<svg width="200" height="200" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="#f3f4f6"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="Arial" font-size="14" fill="#9ca3af">Image not available</text></svg>',
+                { 
+                  headers: { 
+                    'Content-Type': 'image/svg+xml',
+                    'Cache-Control': 'no-cache'
+                  } 
+                }
               );
             }
           });
@@ -115,17 +125,8 @@ self.addEventListener('sync', (event) => {
   }
 });
 
-// Periodic sync for updates (if supported)
-self.addEventListener('periodicsync', (event) => {
-  if (event.tag === 'zeno-content-update') {
-    console.log(`${APP_PREFIX} Service Worker: Periodic sync for content updates`);
-    event.waitUntil(updateCachedContent());
-  }
-});
-
 async function doBackgroundSync() {
   try {
-    // Sync pending orders, cart items, etc.
     const pendingData = await getPendingActions();
     console.log(`${APP_PREFIX} Syncing ${pendingData.length} pending actions`);
     
@@ -137,32 +138,12 @@ async function doBackgroundSync() {
   }
 }
 
-async function updateCachedContent() {
-  try {
-    const cache = await caches.open(CACHE_NAME);
-    const requests = STATIC_ASSETS.map(url => new Request(url));
-    
-    for (const request of requests) {
-      try {
-        const networkResponse = await fetch(request);
-        await cache.put(request, networkResponse);
-      } catch (error) {
-        console.log(`${APP_PREFIX} Failed to update:`, request.url);
-      }
-    }
-  } catch (error) {
-    console.error(`${APP_PREFIX} Content update failed:`, error);
-  }
-}
-
 // Utility functions
 async function getPendingActions() {
-  // Get pending actions from IndexedDB or localStorage
   return JSON.parse(localStorage.getItem('zeno-pending-actions') || '[]');
 }
 
 async function syncAction(action) {
-  // Sync individual action with server
   try {
     const response = await fetch(action.url, {
       method: action.method,
@@ -171,12 +152,11 @@ async function syncAction(action) {
     });
     
     if (response.ok) {
-      // Remove from pending actions
       const pendingActions = await getPendingActions();
       const updatedActions = pendingActions.filter(a => a.id !== action.id);
       localStorage.setItem('zeno-pending-actions', JSON.stringify(updatedActions));
     }
   } catch (error) {
-    throw error;
+    console.error(`${APP_PREFIX} Sync action failed:`, error);
   }
 }
