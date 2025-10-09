@@ -35,13 +35,16 @@ import Cart from "./pages/Cart";
 import Payment from "./pages/Payment";
 import Checkout from "./pages/Checkout"; // ✅ ADD THIS IMPORT
 
-
 // User Management
 import Account from "./pages/Account";
 import EditProfile from "./pages/EditProfile";
 
 // Vendor Pages
 import VendorDashboard from "./pages/VendorDashboard"; // ✅ ADD THIS IMPORT
+
+// PWA Components
+import { PWAInstallButton } from "@/components/PWAInstallButton"; // ✅ ADD PWA INSTALL BUTTON
+//import { OfflineIndicator } from "@/components/OfflineIndicator"; // ✅ ADD OFFLINE INDICATOR
 
 // Fallback
 import NotFound from "./pages/NotFound";
@@ -117,142 +120,144 @@ const PublicRoute = ({ children }: { children: React.ReactNode }) => {
 
 const AppRoutes = () => {
   return (
-    <Routes>
-      {/* Splash Screen - Public */}
-      <Route path="/" element={<SplashScreen />} />
+    <>
+      {/* PWA Components */}
+      {/* <OfflineIndicator /> {/* ✅ Shows when offline */}
+      <PWAInstallButton /> {/* ✅ Handles install prompts */}
       
-      {/* Auth Routes - Public only */}
-      <Route path="/login" element={
-        <PublicRoute>
-          <Login />
-        </PublicRoute>
-      } />
-      <Route path="/register" element={
-        <PublicRoute>
-          <Register />
-        </PublicRoute>
-      } />
-    
-      <Route path="/forgot-password" element={
-        <PublicRoute>
-          <ForgotPassword />
-        </PublicRoute>
-      } />
-      <Route path="/reset-password" element={
-        <PublicRoute>
-          <ResetPassword />
-        </PublicRoute>
-      } />
+      <Routes>
+        {/* Splash Screen - Public */}
+        <Route path="/" element={<SplashScreen />} />
+        
+        {/* Auth Routes - Public only */}
+        <Route path="/login" element={
+          <PublicRoute>
+            <Login />
+          </PublicRoute>
+        } />
+        <Route path="/register" element={
+          <PublicRoute>
+            <Register />
+          </PublicRoute>
+        } />
       
-      {/* Main App Routes - Protected */}
-      <Route path="/dashboard" element={
-        <ProtectedRoute>
-          <Dashboard />
-        </ProtectedRoute>
-      } />
-      
-      {/* Service Categories - Protected */}
-      <Route path="/services/gas" element={
-        <ProtectedRoute>
-          <GasServices />
-        </ProtectedRoute>
-      } />
-      <Route path="/services/roadside" element={
-        <ProtectedRoute>
-          <RoadsideServices />
-        </ProtectedRoute>
-      } />
-      <Route path="/services/oxygen" element={
-        <ProtectedRoute>
-          <OxygenServices />
-        </ProtectedRoute>
-      } />
-      
-      {/* Vendor & Product Detail Pages - Protected */}
-      <Route path="/vendor/:id" element={
-        <ProtectedRoute>
-          <ProviderDetail />
-        </ProtectedRoute>
-      } />
-      <Route path="/services/gas/:id" element={
-        <ProtectedRoute>
-          <GasProviderDetail />
-        </ProtectedRoute>
-      } />
-      <Route path="/gas-product/:id" element={ // ✅ ADD THIS ROUTE
-        <ProtectedRoute>
-          <GasProductDetail />
-        </ProtectedRoute>
-      } />
-      // In your router configuration
-      <Route path="/services/gas" element={<GasServices />} />
-      <Route path="/gas-product/:id" element={<GasProviderDetail />} />
-      // OR if you want the other URL pattern:
-      <Route path="/services/gas_station/:id" element={<GasProviderDetail />} />
-      {/* Cart & Checkout - Protected */}
-      <Route path="/cart" element={
-        <ProtectedRoute>
-          <Cart />
-        </ProtectedRoute>
-      } />
-       <Route path="/checkout" element={ // ✅ ADD THIS ROUTE
-        <ProtectedRoute>
-          <Checkout />
-        </ProtectedRoute>
-      } /> 
-      <Route path="/payment" element={
-        <ProtectedRoute>
-          <Payment />
-        </ProtectedRoute>
-      } />
-     
-      {/* User Profile - Protected */}
-      <Route path="/account" element={
-        <ProtectedRoute>
-          <Account />
-        </ProtectedRoute>
-      } />
-      <Route path="/edit-profile" element={
-        <ProtectedRoute>
-          <EditProfile />
-        </ProtectedRoute>
-      } />
-      <Route path="/change-password" element={
-        <ProtectedRoute>
-          <ChangePassword />
-        </ProtectedRoute>
-      } />
+        <Route path="/forgot-password" element={
+          <PublicRoute>
+            <ForgotPassword />
+          </PublicRoute>
+        } />
+        <Route path="/reset-password" element={
+          <PublicRoute>
+            <ResetPassword />
+          </PublicRoute>
+        } />
+        
+        {/* Main App Routes - Protected */}
+        <Route path="/dashboard" element={
+          <ProtectedRoute>
+            <Dashboard />
+          </ProtectedRoute>
+        } />
+        
+        {/* Service Categories - Protected */}
+        <Route path="/services/gas" element={
+          <ProtectedRoute>
+            <GasServices />
+          </ProtectedRoute>
+        } />
+        <Route path="/services/roadside" element={
+          <ProtectedRoute>
+            <RoadsideServices />
+          </ProtectedRoute>
+        } />
+        <Route path="/services/oxygen" element={
+          <ProtectedRoute>
+            <OxygenServices />
+          </ProtectedRoute>
+        } />
+        
+        {/* Vendor & Product Detail Pages - Protected */}
+        <Route path="/vendor/:id" element={
+          <ProtectedRoute>
+            <ProviderDetail />
+          </ProtectedRoute>
+        } />
+        <Route path="/services/gas/:id" element={
+          <ProtectedRoute>
+            <GasProviderDetail />
+          </ProtectedRoute>
+        } />
+        <Route path="/gas-product/:id" element={ // ✅ ADD THIS ROUTE
+          <ProtectedRoute>
+            <GasProductDetail />
+          </ProtectedRoute>
+        } />
+        
+        {/* Cart & Checkout - Protected */}
+        <Route path="/cart" element={
+          <ProtectedRoute>
+            <Cart />
+          </ProtectedRoute>
+        } />
+        <Route path="/checkout" element={ // ✅ ADD THIS ROUTE
+          <ProtectedRoute>
+            <Checkout />
+          </ProtectedRoute>
+        } /> 
+        <Route path="/payment" element={
+          <ProtectedRoute>
+            <Payment />
+          </ProtectedRoute>
+        } />
+       
+        {/* User Profile - Protected */}
+        <Route path="/account" element={
+          <ProtectedRoute>
+            <Account />
+          </ProtectedRoute>
+        } />
+        <Route path="/edit-profile" element={
+          <ProtectedRoute>
+            <EditProfile />
+          </ProtectedRoute>
+        } />
+        <Route path="/change-password" element={
+          <ProtectedRoute>
+            <ChangePassword />
+          </ProtectedRoute>
+        } />
 
-      {/* Vendor Dashboard - Protected for vendors only*/}
-      <Route path="/vendor/dashboard" element={ // ✅ ADD THIS ROUTE
-        <ProtectedRoute requiredUserType="vendor">
-          <VendorDashboard />
-        </ProtectedRoute>
-      } />
-      
-      {/* Payment History - Protected */}
-      <Route path="/payments" element={
-        <ProtectedRoute>
-          <div className="min-h-screen bg-background p-4">
-            <h1 className="text-2xl font-bold mb-4">Payment History</h1>
-            <p>Payment history page coming soon...</p>
-          </div>
-        </ProtectedRoute>
-      } />
-      
-      {/* Become Vendor - Protected for customers only */}
-      <Route path="/become-vendor" element={
-        <ProtectedRoute requiredUserType="customer">
-          <div className="min-h-screen bg-background p-4">
-            <h1 className="text-2xl font-bold mb-4">Become a Vendor</h1>
-            <p>Vendor registration page coming soon...</p>
-          </div>
-        </ProtectedRoute>
-      } />
-      
-      {/* 404 Fallback */}
-      <Route path="*" element={<NotFound />} />
-    </Routes>
+        {/* Vendor Dashboard - Protected for vendors only*/}
+        <Route path="/vendor/dashboard" element={ // ✅ ADD THIS ROUTE
+          <ProtectedRoute requiredUserType="vendor">
+            <VendorDashboard />
+          </ProtectedRoute>
+        } />
+        
+        {/* Payment History - Protected */}
+        <Route path="/payments" element={
+          <ProtectedRoute>
+            <div className="min-h-screen bg-background p-4">
+              <h1 className="text-2xl font-bold mb-4">Payment History</h1>
+              <p>Payment history page coming soon...</p>
+            </div>
+          </ProtectedRoute>
+        } />
+        
+        {/* Become Vendor - Protected for customers only */}
+        <Route path="/become-vendor" element={
+          <ProtectedRoute requiredUserType="customer">
+            <div className="min-h-screen bg-background p-4">
+              <h1 className="text-2xl font-bold mb-4">Become a Vendor</h1>
+              <p>Vendor registration page coming soon...</p>
+            </div>
+          </ProtectedRoute>
+        } />
+        
+        {/* 404 Fallback */}
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </>
   );
 };
 
@@ -263,7 +268,9 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
-          <AppRoutes />
+          <div className="min-h-screen bg-background">
+            <AppRoutes />
+          </div>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
