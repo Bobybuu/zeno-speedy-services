@@ -582,3 +582,57 @@ export const uploadFile = (file: File, uploadUrl: string, onProgress?: (progress
 };
 
 export default api;
+
+
+// Add to your api.tsx
+export const safeGasProductsAPI = {
+  getGasProducts: async (filters?: GasProductFilters) => {
+    try {
+      // Remove problematic filters that might cause 500 errors
+      const safeFilters = { ...filters };
+      
+      // Don't send empty or undefined values
+      Object.keys(safeFilters).forEach(key => {
+        if (safeFilters[key as keyof GasProductFilters] === undefined || safeFilters[key as keyof GasProductFilters] === '') {
+          delete safeFilters[key as keyof GasProductFilters];
+        }
+      });
+
+      // Ensure boolean values are properly formatted
+      if (safeFilters.is_available !== undefined) {
+        safeFilters.is_available = Boolean(safeFilters.is_available);
+      }
+      if (safeFilters.vendor__is_verified !== undefined) {
+        safeFilters.vendor__is_verified = Boolean(safeFilters.vendor__is_verified);
+      }
+
+      console.log('Making API call with filters:', safeFilters);
+      
+      const response = await api.get('/vendors/gas-products/', { 
+        params: safeFilters,
+        paramsSerializer: (params) => {
+          return Object.entries(params)
+            .map(([key, value]) => {
+              if (value === null || value === undefined) return '';
+              return `${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
+            })
+            .filter(Boolean)
+            .join('&');
+        }
+      });
+      
+      return response.data;
+    } catch (error: any) {
+      console.error('Error in safeGasProductsAPI.getGasProducts:', error);
+      
+      // If there's a 500 error, try without location filters
+      if (error.response?.status === 500 && filters?.lat && filters?.lng) {
+        console.log('Retrying without location filters...');
+        const { lat, lng, radius, ...retryFilters } = filters;
+        return gasProductsAPI.getGasProducts(retryFilters);
+      }
+      
+      throw error;
+    }
+  }
+};

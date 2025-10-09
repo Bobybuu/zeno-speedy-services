@@ -8,7 +8,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import ServiceCard from "@/components/ServiceCard";
 import BottomNav from "@/components/BottomNav";
 import { motion } from "framer-motion";
-import { servicesAPI, vendorsAPI, gasProductsAPI } from "@/services/api"; // ✅ ADD gasProductsAPI
+import { safeGasProductsAPI, vendorsAPI } from "@/services/api"; // ✅ Use safeGasProductsAPI
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 
@@ -21,10 +21,12 @@ interface GasProduct {
   price_without_cylinder: number;
   vendor_name: string;
   vendor_city: string;
-  vendor_latitude: number;
-  vendor_longitude: number;
+  vendor_latitude?: number;
+  vendor_longitude?: number;
   is_available: boolean;
   in_stock: boolean;
+  stock_quantity: number;
+  min_stock_alert: number;
 }
 
 interface Vendor {
@@ -36,8 +38,8 @@ interface Vendor {
   address: string;
   city: string;
   contact_number: string;
-  latitude: number;
-  longitude: number;
+  latitude?: number;
+  longitude?: number;
 }
 
 const Dashboard = () => {
@@ -83,10 +85,16 @@ const Dashboard = () => {
         (position) => {
           const { latitude, longitude } = position.coords;
           setUserLocation([latitude, longitude]);
+          console.log("User location set:", latitude, longitude);
         },
         (error) => {
           console.error("Error getting location:", error);
           toast.info("Enable location for better results");
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 60000
         }
       );
     }
@@ -99,20 +107,25 @@ const Dashboard = () => {
         setLoading(true);
         console.log("Fetching dashboard data...");
 
-        // Fetch gas products instead of services - ✅ FIXED: Use gasProductsAPI
+        // Prepare filters for gas products
         const gasFilters: any = {
           is_available: true,
           vendor__is_verified: true
         };
 
-        if (userLocation) {
+        // Add location filters only if we have valid coordinates
+        if (userLocation && userLocation[0] && userLocation[1]) {
           gasFilters.lat = userLocation[0];
           gasFilters.lng = userLocation[1];
           gasFilters.radius = 10;
+          console.log("Using location filters:", gasFilters);
+        } else {
+          console.log("No location available, fetching all available products");
         }
 
+        // Use Promise.allSettled to handle individual API failures gracefully
         const [gasResponse, vendorsResponse] = await Promise.allSettled([
-          gasProductsAPI.getGasProducts(gasFilters), // ✅ FIXED: Use gasProductsAPI
+          safeGasProductsAPI.getGasProducts(gasFilters), // ✅ Use the safe API
           vendorsAPI.getVendors({ 
             business_type: 'gas_station',
             is_verified: true,
@@ -120,28 +133,47 @@ const Dashboard = () => {
           })
         ]);
 
+        console.log("API responses:", { gasResponse, vendorsResponse });
+
         // Handle gas products response
         if (gasResponse.status === 'fulfilled') {
-          console.log("Gas products loaded:", gasResponse.value.data);
-          setGasProducts(gasResponse.value.data.slice(0, 4));
+          const gasData = gasResponse.value;
+          console.log("Gas products API response:", gasData);
+          
+          // Handle different response formats (array vs paginated)
+          const products = Array.isArray(gasData) ? gasData : 
+                          gasData.results ? gasData.results : 
+                          gasData.data ? gasData.data : [];
+          
+          console.log("Processed gas products:", products);
+          setGasProducts(products.slice(0, 4));
         } else {
           console.error("Failed to fetch gas products:", gasResponse.reason);
           // Use fallback mock data for gas products
           setGasProducts(getMockGasProducts());
+          toast.warning("Using demo gas products data");
         }
 
         // Handle vendors response
         if (vendorsResponse.status === 'fulfilled') {
-          console.log("Vendors loaded:", vendorsResponse.value.data);
-          setRecentVendors(vendorsResponse.value.data.slice(0, 4));
+          const vendorsData = vendorsResponse.value.data || vendorsResponse.value;
+          console.log("Vendors API response:", vendorsData);
+          
+          // Handle different response formats
+          const vendors = Array.isArray(vendorsData) ? vendorsData : 
+                         vendorsData.results ? vendorsData.results : [];
+          
+          console.log("Processed vendors:", vendors);
+          setRecentVendors(vendors.slice(0, 4));
         } else {
           console.error("Failed to fetch vendors:", vendorsResponse.reason);
           // Use fallback mock data for vendors
           setRecentVendors(getMockVendors());
+          toast.warning("Using demo vendors data");
         }
 
       } catch (error: any) {
-        console.error("Error fetching dashboard data:", error);
+        console.error("Error in fetchDashboardData:", error);
         
         // Use comprehensive fallback data
         setGasProducts(getMockGasProducts());
@@ -171,7 +203,9 @@ const Dashboard = () => {
       vendor_latitude: -1.286389,
       vendor_longitude: 36.817223,
       is_available: true,
-      in_stock: true
+      in_stock: true,
+      stock_quantity: 50,
+      min_stock_alert: 5
     },
     {
       id: 2,
@@ -185,7 +219,9 @@ const Dashboard = () => {
       vendor_latitude: -1.266667,
       vendor_longitude: 36.800000,
       is_available: true,
-      in_stock: true
+      in_stock: true,
+      stock_quantity: 30,
+      min_stock_alert: 3
     },
     {
       id: 3,
@@ -199,7 +235,9 @@ const Dashboard = () => {
       vendor_latitude: -1.300000,
       vendor_longitude: 36.783333,
       is_available: true,
-      in_stock: true
+      in_stock: true,
+      stock_quantity: 20,
+      min_stock_alert: 2
     },
     {
       id: 4,
@@ -213,7 +251,9 @@ const Dashboard = () => {
       vendor_latitude: -1.283333,
       vendor_longitude: 36.816667,
       is_available: true,
-      in_stock: true
+      in_stock: true,
+      stock_quantity: 40,
+      min_stock_alert: 4
     }
   ];
 
@@ -268,20 +308,25 @@ const Dashboard = () => {
     }
   ];
 
-  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): string => {
+  const calculateDistance = (lat1: number, lon1: number, lat2?: number, lon2?: number): string => {
     if (!lat1 || !lon1 || !lat2 || !lon2) return "Nearby";
     
-    const R = 6371; // Earth's radius in km
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = 
-      Math.sin(dLat/2) * Math.sin(dLat/2) +
-      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
-      Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    const distance = R * c;
-    
-    return distance < 1 ? `${Math.round(distance * 1000)}m` : `${distance.toFixed(1)}km`;
+    try {
+      const R = 6371; // Earth's radius in km
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = 
+        Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+        Math.sin(dLon/2) * Math.sin(dLon/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      const distance = R * c;
+      
+      return distance < 1 ? `${Math.round(distance * 1000)}m` : `${distance.toFixed(1)}km`;
+    } catch (error) {
+      console.error("Error calculating distance:", error);
+      return "Nearby";
+    }
   };
 
   const formatPrice = (price: number) => {
@@ -312,12 +357,21 @@ const Dashboard = () => {
     navigate(`/vendor/${vendor.id}`);
   };
 
+  const handleSearch = () => {
+    if (searchQuery.trim()) {
+      navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background pb-20 flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
           <p className="text-muted-foreground">Loading dashboard...</p>
+          <p className="text-sm text-muted-foreground mt-2">
+            {userLocation ? "Using your location" : "Location not available"}
+          </p>
         </div>
       </div>
     );
@@ -325,7 +379,7 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen bg-background pb-20">
-      {/* Header - Same as before */}
+      {/* Header */}
       <header className="sticky top-0 z-40 bg-primary text-white shadow-lg">
         <div className="flex items-center justify-between p-4">
           <div className="flex items-center gap-3">
@@ -375,8 +429,8 @@ const Dashboard = () => {
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10 bg-white text-foreground"
               onKeyPress={(e) => {
-                if (e.key === 'Enter' && searchQuery.trim()) {
-                  navigate(`/search?q=${encodeURIComponent(searchQuery)}`);
+                if (e.key === 'Enter') {
+                  handleSearch();
                 }
               }}
             />
@@ -468,7 +522,7 @@ const Dashboard = () => {
                     <span className="text-xs font-semibold text-primary">
                       {formatPrice(product.price_with_cylinder)}
                     </span>
-                    {product.in_stock ? (
+                    {product.in_stock && product.stock_quantity > 0 ? (
                       <span className="text-xs bg-green-100 text-green-800 px-1 py-0.5 rounded">
                         In Stock
                       </span>

@@ -10,7 +10,8 @@ urlpatterns = [
     path('api/users/', include('users.urls')),
     path('api/services/', include('services.urls')),
     path('api/vendors/', include('vendors.urls')),
-    #path('api/orders/', include('orders.urls')),
+    path('api/orders/', include('orders.urls')),
+    path('api/payments/', include('payments.urls')),
 ]
 
 if settings.DEBUG:

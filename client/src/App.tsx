@@ -33,6 +33,7 @@ import GasProductDetail from "./pages/GasServices"; // ✅ ADD THIS IMPORT
 // Cart & Payment
 import Cart from "./pages/Cart";
 import Payment from "./pages/Payment";
+import Checkout from "./pages/Checkout"; // ✅ ADD THIS IMPORT
 
 
 // User Management
@@ -40,7 +41,7 @@ import Account from "./pages/Account";
 import EditProfile from "./pages/EditProfile";
 
 // Vendor Pages
-//import VendorDashboard from "./pages/VendorDashboard"; // ✅ ADD THIS IMPORT
+import VendorDashboard from "./pages/VendorDashboard"; // ✅ ADD THIS IMPORT
 
 // Fallback
 import NotFound from "./pages/NotFound";
@@ -183,18 +184,22 @@ const AppRoutes = () => {
           <GasProductDetail />
         </ProtectedRoute>
       } />
-      
+      // In your router configuration
+      <Route path="/services/gas" element={<GasServices />} />
+      <Route path="/gas-product/:id" element={<GasProviderDetail />} />
+      // OR if you want the other URL pattern:
+      <Route path="/services/gas_station/:id" element={<GasProviderDetail />} />
       {/* Cart & Checkout - Protected */}
       <Route path="/cart" element={
         <ProtectedRoute>
           <Cart />
         </ProtectedRoute>
       } />
-      {/* <Route path="/checkout" element={ // ✅ ADD THIS ROUTE
+       <Route path="/checkout" element={ // ✅ ADD THIS ROUTE
         <ProtectedRoute>
           <Checkout />
         </ProtectedRoute>
-      } /> */}
+      } /> 
       <Route path="/payment" element={
         <ProtectedRoute>
           <Payment />
@@ -218,12 +223,12 @@ const AppRoutes = () => {
         </ProtectedRoute>
       } />
 
-      {/* Vendor Dashboard - Protected for vendors only
+      {/* Vendor Dashboard - Protected for vendors only*/}
       <Route path="/vendor/dashboard" element={ // ✅ ADD THIS ROUTE
-       // <ProtectedRoute requiredUserType="vendor">
-          //<VendorDashboard />
-        //</ProtectedRoute>
-      //} />*/}
+        <ProtectedRoute requiredUserType="vendor">
+          <VendorDashboard />
+        </ProtectedRoute>
+      } />
       
       {/* Payment History - Protected */}
       <Route path="/payments" element={

@@ -171,9 +171,31 @@ const GasServices = () => {
     return `KSh ${price.toLocaleString()}`;
   };
 
-  const handleProductClick = (product: GasProduct) => {
-    navigate(`/gas-product/${product.id}`, { state: { product } });
-  };
+  // In GasServices.tsx - Update the click handler
+const handleProductClick = (product: GasProduct) => {
+  // Use a consistent route pattern
+  navigate(`/services/gas/providers/${product.id}`, {
+    state: {
+      product: product,
+      vendor: {
+        id: product.id,
+        business_name: product.vendor_name,
+        address: product.vendor_address,
+        contact_number: product.vendor_contact,
+        city: product.vendor_city,
+        latitude: product.vendor_latitude,
+        longitude: product.vendor_longitude
+      }
+    }
+  });
+};
+
+// Also update the vendor card click handlers if you have them
+const handleVendorClick = (vendor: any) => {
+  navigate(`/services/gas/providers/${vendor.id}`, {
+    state: { vendor }
+  });
+};
 
   const handleRefresh = () => {
     if (userLocation) {

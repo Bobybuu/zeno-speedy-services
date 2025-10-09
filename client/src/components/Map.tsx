@@ -2,112 +2,270 @@ import { useEffect, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 
+// Set Mapbox token globally
+mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN || 'your-mapbox-token-here';
+
 interface Provider {
   id: number;
   name: string;
   location: string;
   coords: [number, number];
   price: string;
+  rating?: number;
+  distance?: string;
 }
 
 interface MapProps {
   providers?: Provider[];
   center?: [number, number];
-  userLocation?: [number, number]; // now optional
+  userLocation?: [number, number] | null;
+  zoom?: number;
 }
 
 const Map = ({
   providers = [],
-  center = [36.8219, -1.2921], // [lng, lat] (Nairobi default)
-  userLocation,
+  center = [36.817223, -1.286389], // ✅ FIXED: [lng, lat] format (Nairobi)
+  userLocation = null,
+  zoom = 13,
 }: MapProps) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
-  const [userCoords, setUserCoords] = useState<[number, number] | null>(
-    userLocation || null
-  );
-  const [mapError, setMapError] = useState(false);
+  const markersRef = useRef<mapboxgl.Marker[]>([]);
+  const [mapLoaded, setMapLoaded] = useState(false);
+  const [mapError, setMapError] = useState<string | null>(null);
 
+  // Clear all markers
+  const clearMarkers = () => {
+    markersRef.current.forEach(marker => marker.remove());
+    markersRef.current = [];
+  };
+
+  // Add provider markers
+  const addProviderMarkers = (map: mapboxgl.Map) => {
+    providers.forEach((provider) => {
+      // Validate coordinates
+      if (!provider.coords || 
+          isNaN(provider.coords[0]) || isNaN(provider.coords[1]) ||
+          Math.abs(provider.coords[0]) > 180 || Math.abs(provider.coords[1]) > 90) {
+        console.warn('Invalid coordinates for provider:', provider.id, provider.coords);
+        return;
+      }
+
+      try {
+        // Create custom marker element
+        const el = document.createElement('div');
+        el.className = 'custom-marker';
+        el.innerHTML = `
+          <div class="w-6 h-6 bg-red-500 rounded-full border-2 border-white shadow-lg flex items-center justify-center">
+            <span class="text-white text-xs font-bold">🔥</span>
+          </div>
+        `;
+
+        const marker = new mapboxgl.Marker({
+          element: el,
+          anchor: 'bottom'
+        })
+          .setLngLat(provider.coords)
+          .setPopup(
+            new mapboxgl.Popup({ offset: 25 })
+              .setHTML(`
+                <div class="p-2 max-w-xs">
+                  <h3 class="font-semibold text-sm">${provider.name}</h3>
+                  <p class="text-xs text-gray-600 mt-1">${provider.location}</p>
+                  ${provider.price ? `<p class="text-sm font-semibold text-green-600 mt-1">${provider.price}</p>` : ''}
+                  ${provider.rating ? `<p class="text-xs text-yellow-600 mt-1">⭐ ${provider.rating}</p>` : ''}
+                  ${provider.distance ? `<p class="text-xs text-gray-500 mt-1">${provider.distance} away</p>` : ''}
+                </div>
+              `)
+          )
+          .addTo(map);
+
+        markersRef.current.push(marker);
+      } catch (error) {
+        console.error('Error adding marker for provider:', provider.id, error);
+      }
+    });
+  };
+
+  // Add user location marker
+  const addUserMarker = (map: mapboxgl.Map, coords: [number, number]) => {
+    try {
+      const el = document.createElement('div');
+      el.className = 'user-marker';
+      el.innerHTML = `
+        <div class="w-8 h-8 bg-blue-500 rounded-full border-2 border-white shadow-lg flex items-center justify-center">
+          <span class="text-white text-xs">📍</span>
+        </div>
+      `;
+
+      const marker = new mapboxgl.Marker({
+        element: el,
+        anchor: 'bottom'
+      })
+        .setLngLat(coords)
+        .setPopup(new mapboxgl.Popup({ offset: 25 }).setText('Your location'))
+        .addTo(map);
+
+      markersRef.current.push(marker);
+    } catch (error) {
+      console.error('Error adding user marker:', error);
+    }
+  };
+
+  // Initialize map
   useEffect(() => {
-    mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN as string;
-
     if (!mapContainer.current) return;
 
+    // Check if Mapbox token is available
+    if (!mapboxgl.accessToken) {
+      setMapError('Mapbox access token not configured');
+      return;
+    }
+
     try {
-      // Initialize Map
       const map = new mapboxgl.Map({
         container: mapContainer.current,
-        style: "mapbox://styles/mapbox/streets-v12",
-        center: userCoords || center,
-        zoom: 13,
+        style: "mapbox://styles/mapbox/light-v11", // Updated style
+        center: center,
+        zoom: zoom,
+        pitch: 0, // Disable 3D tilt for better performance
+        bearing: 0, // Disable rotation
+        antialias: false, // Better performance
       });
 
       mapRef.current = map;
 
-      // Add controls
+      // Add navigation controls
       map.addControl(new mapboxgl.NavigationControl(), "top-right");
 
-      // Detect user location
-      if (!userCoords) {
-        navigator.geolocation.getCurrentPosition(
-          (pos) => {
-            const { latitude, longitude } = pos.coords;
-            const coords: [number, number] = [longitude, latitude];
-            setUserCoords(coords);
-            map.flyTo({ center: coords, zoom: 14 });
+      // Handle map load
+      map.on('load', () => {
+        setMapLoaded(true);
+        setMapError(null);
+        
+        // Add markers after map is loaded
+        addProviderMarkers(map);
 
-            // Add user marker
-            new mapboxgl.Marker({ color: "blue" })
-              .setLngLat(coords)
-              .setPopup(new mapboxgl.Popup().setText("You are here"))
-              .addTo(map);
-          },
-          (err) => {
-            console.warn("Geolocation error:", err);
-          },
-          { enableHighAccuracy: true }
-        );
-      } else {
-        new mapboxgl.Marker({ color: "blue" })
-          .setLngLat(userCoords)
-          .setPopup(new mapboxgl.Popup().setText("You are here"))
-          .addTo(map);
-      }
-
-      // Add provider markers
-      providers.forEach((provider) => {
-        const marker = new mapboxgl.Marker({ color: "red" })
-          .setLngLat(provider.coords)
-          .setPopup(
-            new mapboxgl.Popup().setHTML(`
-              <div>
-                <strong>${provider.name}</strong><br />
-                ${provider.location}<br />
-                ${provider.price ? `<em>${provider.price}</em>` : ""}
-              </div>
-            `)
-          )
-          .addTo(map);
+        // Handle user location
+        if (userLocation) {
+          // Use provided user location
+          addUserMarker(map, userLocation);
+          map.flyTo({ center: userLocation, zoom: 14 });
+        } else {
+          // Try to get user location
+          if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+              (position) => {
+                const { latitude, longitude } = position.coords;
+                const userCoords: [number, number] = [longitude, latitude];
+                addUserMarker(map, userCoords);
+                map.flyTo({ center: userCoords, zoom: 14 });
+              },
+              (error) => {
+                console.warn("Geolocation failed:", error);
+                // Continue without user location
+              },
+              { 
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 300000 // 5 minutes cache
+              }
+            );
+          }
+        }
       });
 
-      return () => map.remove();
+      // Handle map errors
+      map.on('error', (e) => {
+        console.error('Map error:', e);
+        setMapError('Failed to load map');
+      });
+
+      // Handle render errors
+      map.on('render', () => {
+        if (!map.loaded()) {
+          setMapError('Map is still loading...');
+        }
+      });
+
+      // Cleanup function
+      return () => {
+        if (mapRef.current) {
+          clearMarkers();
+          mapRef.current.remove();
+          mapRef.current = null;
+        }
+      };
+
     } catch (error) {
-      console.error("Mapbox init error:", error);
-      setMapError(true);
+      console.error("Map initialization error:", error);
+      setMapError('Failed to initialize map');
     }
-  }, [providers, userCoords]);
+  }, []); // Empty dependency array - map initialized once
+
+  // Update markers when providers change
+  useEffect(() => {
+    if (mapRef.current && mapLoaded) {
+      clearMarkers();
+      addProviderMarkers(mapRef.current);
+    }
+  }, [providers, mapLoaded]);
+
+  // Update user location
+  useEffect(() => {
+    if (mapRef.current && mapLoaded && userLocation) {
+      // Clear existing user markers
+      const userMarkers = markersRef.current.filter(marker => 
+        marker.getElement().classList.contains('user-marker')
+      );
+      userMarkers.forEach(marker => {
+        marker.remove();
+        markersRef.current = markersRef.current.filter(m => m !== marker);
+      });
+
+      // Add new user marker
+      addUserMarker(mapRef.current, userLocation);
+      mapRef.current.flyTo({ center: userLocation, zoom: 14 });
+    }
+  }, [userLocation, mapLoaded]);
 
   if (mapError) {
     return (
-      <div className="w-full h-full bg-muted flex items-center justify-center">
-        <p className="text-muted-foreground">⚠️ Map could not be loaded.</p>
+      <div className="w-full h-full bg-gray-100 rounded-lg flex items-center justify-center">
+        <div className="text-center text-muted-foreground">
+          <div className="text-4xl mb-2">🗺️</div>
+          <p className="font-medium">Map Unavailable</p>
+          <p className="text-sm mt-1 max-w-xs">{mapError}</p>
+          <p className="text-xs mt-2 text-gray-500">
+            This could be due to network issues or missing Mapbox configuration.
+          </p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="relative w-full h-[500px] rounded-lg overflow-hidden">
-      <div ref={mapContainer} className="absolute inset-0" />
+    <div className="relative w-full h-full rounded-lg overflow-hidden border">
+      <div 
+        ref={mapContainer} 
+        className="absolute inset-0"
+        style={{ minHeight: '400px' }}
+      />
+      
+      {/* Loading overlay */}
+      {!mapLoaded && !mapError && (
+        <div className="absolute inset-0 bg-gray-100 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+            <p className="text-sm text-muted-foreground">Loading map...</p>
+          </div>
+        </div>
+      )}
+
+      {/* Map attribution */}
+      <div className="absolute bottom-2 left-2 text-xs text-gray-500 bg-white/80 px-2 py-1 rounded">
+        © Mapbox © OpenStreetMap
+      </div>
     </div>
   );
 };
