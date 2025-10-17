@@ -21,6 +21,11 @@ api.interceptors.request.use((config) => {
     config.headers['Content-Type'] = 'application/json';
   }
   
+  // ✅ Add shorter timeout for cart operations
+  if (config.url?.includes('/cart/')) {
+    config.timeout = 8000; // 8 seconds for cart operations
+  }
+  
   return config;
 }, (error) => {
   return Promise.reject(error);
@@ -480,71 +485,288 @@ export const paymentsAPI = {
     api.post('/payments/create_order_payment/', { order: orderId, payment_method: paymentMethod }),
 };
 
-// Cart API (local storage based, but could be API-based)
+// ✅ UPDATED: Cart API with proper localStorage array handling
 export const cartAPI = {
-  getCart: () => {
-    const cart = localStorage.getItem('cart');
-    return cart ? JSON.parse(cart) : [];
+  // Get user's cart from backend
+  getCart: async () => {
+    try {
+      const token = localStorage.getItem('access_token');
+      if (token) {
+        const response = await api.get('/orders/cart/my_cart/');
+        console.log('🛒 Backend cart response:', response.data);
+        return response.data;
+      } else {
+        // Fallback to localStorage for guest users
+        return cartAPI.getLocalStorageCart();
+      }
+    } catch (error: any) {
+      console.error('Error fetching cart from backend:', error);
+      
+      // If it's a timeout or network error, fallback to localStorage
+      if (error.code === 'ECONNABORTED' || !error.response) {
+        console.log('🛒 Using localStorage fallback due to timeout');
+        return cartAPI.getLocalStorageCart();
+      }
+      
+      // For 401 errors, user might not be properly authenticated
+      if (error.response?.status === 401) {
+        console.log('🛒 User not authenticated, using localStorage');
+        return cartAPI.getLocalStorageCart();
+      }
+      
+      // For other errors, still fallback to localStorage
+      return cartAPI.getLocalStorageCart();
+    }
   },
-  
-  addToCart: (item: CartItem) => {
-    const cart = cartAPI.getCart();
-    const existingItemIndex = cart.findIndex((cartItem: CartItem) => 
-      cartItem.product_id === item.product_id && cartItem.include_cylinder === item.include_cylinder
+
+  // Add gas product to cart
+  addGasProduct: async (productId: number, quantity: number = 1) => {
+  try {
+    const token = localStorage.getItem('access_token');
+    if (token) {
+      console.log('🛒 Adding to backend cart:', { productId, quantity });
+      const response = await api.post('/orders/cart/add_gas_product/', {
+        product_id: productId,
+        quantity: quantity
+      });
+      console.log('🛒 Backend add to cart response:', response.data);
+      return response.data;
+    } else {
+      console.log('🛒 Adding to localStorage cart:', { productId, quantity });
+      const result = cartAPI.addToLocalStorage(productId, quantity);
+      console.log('🛒 localStorage cart after add:', result);
+      return result;
+    }
+  } catch (error: any) {
+    console.error('Error adding to cart:', error);
+    
+    if (error.response?.status === 401) {
+      throw new Error('Please log in to add items to cart');
+    } else if (error.code === 'ECONNABORTED' || !error.response) {
+      console.log('🛒 Backend timeout, using localStorage fallback');
+      const result = cartAPI.addToLocalStorage(productId, quantity);
+      console.log('🛒 localStorage cart after fallback:', result);
+      return result;
+    } else {
+      console.log('🛒 Other error, using localStorage fallback');
+      const result = cartAPI.addToLocalStorage(productId, quantity);
+      console.log('🛒 localStorage cart after error fallback:', result);
+      return result;
+    }
+  }
+},
+
+  // Update item quantity
+  updateQuantity: async (itemId: number, quantity: number) => {
+    try {
+      const token = localStorage.getItem('access_token');
+      if (token) {
+        const response = await api.post('/orders/cart/update_quantity/', {
+          item_id: itemId,
+          quantity: quantity
+        });
+        return response.data;
+      } else {
+        return cartAPI.updateLocalStorageItem(itemId, quantity);
+      }
+    } catch (error: any) {
+      console.error('Error updating quantity:', error);
+      if (error.code === 'ECONNABORTED' || !error.response) {
+        return cartAPI.updateLocalStorageItem(itemId, quantity);
+      }
+      throw error;
+    }
+  },
+
+  // Remove item from cart
+  removeItem: async (itemId: number) => {
+    try {
+      const token = localStorage.getItem('access_token');
+      if (token) {
+        const response = await api.post('/orders/cart/remove_item/', {
+          item_id: itemId
+        });
+        return response.data;
+      } else {
+        return cartAPI.removeFromLocalStorage(itemId);
+      }
+    } catch (error: any) {
+      console.error('Error removing item:', error);
+      if (error.code === 'ECONNABORTED' || !error.response) {
+        return cartAPI.removeFromLocalStorage(itemId);
+      }
+      throw error;
+    }
+  },
+
+  // Clear entire cart
+  clearCart: async () => {
+    try {
+      const token = localStorage.getItem('access_token');
+      if (token) {
+        const response = await api.post('/orders/cart/clear/');
+        return response.data;
+      } else {
+        return cartAPI.clearLocalStorage();
+      }
+    } catch (error: any) {
+      console.error('Error clearing cart:', error);
+      if (error.code === 'ECONNABORTED' || !error.response) {
+        return cartAPI.clearLocalStorage();
+      }
+      throw error;
+    }
+  },
+
+  // ✅ FIXED: Improved localStorage helper functions with array detection
+  getLocalStorageCart: () => {
+    try {
+      const cart = localStorage.getItem('gaslink_cart');
+      if (cart) {
+        const parsedCart = JSON.parse(cart);
+        console.log('🛒 LocalStorage cart:', parsedCart);
+        
+        // ✅ Handle case where cart is stored as array instead of object
+        if (Array.isArray(parsedCart)) {
+          console.log('🛒 Converting array cart to object format');
+          const convertedCart = {
+            items: parsedCart,
+            total_amount: parsedCart.reduce((sum: number, item: any) => sum + (item.total_price || 0), 0),
+            item_count: parsedCart.reduce((count: number, item: any) => count + (item.quantity || 0), 0),
+            updated_at: new Date().toISOString()
+          };
+          // Save the corrected format back to localStorage
+          localStorage.setItem('gaslink_cart', JSON.stringify(convertedCart));
+          return convertedCart;
+        }
+        
+        return parsedCart;
+      }
+    } catch (error) {
+      console.error('Error reading localStorage cart:', error);
+    }
+    
+    // Return empty cart structure
+    const emptyCart = {
+      items: [],
+      total_amount: 0,
+      item_count: 0,
+      updated_at: new Date().toISOString()
+    };
+    console.log('🛒 Created new empty cart');
+    return emptyCart;
+  },
+
+  // ✅ FIXED: Improved addToLocalStorage with proper structure validation
+  addToLocalStorage: (productId: number, quantity: number = 1) => {
+    const cart = cartAPI.getLocalStorageCart();
+    
+    // ✅ Ensure cart has the correct structure
+    if (!cart.items) {
+      cart.items = [];
+    }
+    if (cart.total_amount === undefined) {
+      cart.total_amount = 0;
+    }
+    if (cart.item_count === undefined) {
+      cart.item_count = 0;
+    }
+    
+    // Check if product already exists in cart
+    const existingItemIndex = cart.items.findIndex((item: any) => 
+      item.gas_product === productId || item.product_id === productId
     );
     
     if (existingItemIndex > -1) {
-      cart[existingItemIndex].quantity += item.quantity;
+      cart.items[existingItemIndex].quantity += quantity;
+      if (cart.items[existingItemIndex].unit_price) {
+        cart.items[existingItemIndex].total_price = 
+          cart.items[existingItemIndex].unit_price * cart.items[existingItemIndex].quantity;
+      }
     } else {
-      cart.push(item);
+      const newItem = {
+        id: Date.now(),
+        item_type: 'gas_product',
+        gas_product: productId,
+        product_id: productId, // Add both for compatibility
+        quantity: quantity,
+        unit_price: 0, // Will be updated when product details are fetched
+        total_price: 0,
+        added_at: new Date().toISOString(),
+        item_name: 'Gas Product'
+      };
+      cart.items.push(newItem);
     }
     
-    localStorage.setItem('cart', JSON.stringify(cart));
+    // Update cart totals
+    cart.total_amount = cart.items.reduce((sum: number, item: any) => sum + (item.total_price || 0), 0);
+    cart.item_count = cart.items.reduce((count: number, item: any) => count + (item.quantity || 0), 0);
+    cart.updated_at = new Date().toISOString();
+    
+    localStorage.setItem('gaslink_cart', JSON.stringify(cart));
+    console.log('🛒 Updated localStorage cart:', cart);
     return cart;
   },
-  
-  updateCartItem: (productId: number, includeCylinder: boolean, quantity: number) => {
-    const cart = cartAPI.getCart();
-    const itemIndex = cart.findIndex((item: CartItem) => 
-      item.product_id === productId && item.include_cylinder === includeCylinder
-    );
+
+  updateLocalStorageItem: (itemId: number, quantity: number) => {
+    const cart = cartAPI.getLocalStorageCart();
+    const itemIndex = cart.items.findIndex((item: any) => item.id === itemId);
     
     if (itemIndex > -1) {
       if (quantity <= 0) {
-        cart.splice(itemIndex, 1);
+        cart.items.splice(itemIndex, 1);
       } else {
-        cart[itemIndex].quantity = quantity;
+        cart.items[itemIndex].quantity = quantity;
+        if (cart.items[itemIndex].unit_price) {
+          cart.items[itemIndex].total_price = cart.items[itemIndex].unit_price * quantity;
+        }
       }
     }
     
-    localStorage.setItem('cart', JSON.stringify(cart));
+    // Update cart totals
+    cart.total_amount = cart.items.reduce((sum: number, item: any) => sum + (item.total_price || 0), 0);
+    cart.item_count = cart.items.reduce((count: number, item: any) => count + (item.quantity || 0), 0);
+    cart.updated_at = new Date().toISOString();
+    
+    localStorage.setItem('gaslink_cart', JSON.stringify(cart));
     return cart;
   },
-  
-  removeFromCart: (productId: number, includeCylinder: boolean) => {
-    const cart = cartAPI.getCart();
-    const filteredCart = cart.filter((item: CartItem) => 
-      !(item.product_id === productId && item.include_cylinder === includeCylinder)
-    );
+
+  removeFromLocalStorage: (itemId: number) => {
+    const cart = cartAPI.getLocalStorageCart();
+    cart.items = cart.items.filter((item: any) => item.id !== itemId);
     
-    localStorage.setItem('cart', JSON.stringify(filteredCart));
-    return filteredCart;
+    // Update cart totals
+    cart.total_amount = cart.items.reduce((sum: number, item: any) => sum + (item.total_price || 0), 0);
+    cart.item_count = cart.items.reduce((count: number, item: any) => count + (item.quantity || 0), 0);
+    cart.updated_at = new Date().toISOString();
+    
+    localStorage.setItem('gaslink_cart', JSON.stringify(cart));
+    return cart;
   },
-  
-  clearCart: () => {
-    localStorage.removeItem('cart');
-    return [];
+
+  clearLocalStorage: () => {
+    const emptyCart = {
+      items: [],
+      total_amount: 0,
+      item_count: 0,
+      updated_at: new Date().toISOString()
+    };
+    localStorage.setItem('gaslink_cart', JSON.stringify(emptyCart));
+    return emptyCart;
   },
-  
-  getCartTotal: () => {
-    const cart = cartAPI.getCart();
-    return cart.reduce((total: number, item: CartItem) => {
-      const price = item.include_cylinder ? 
-        (item.product?.price_with_cylinder || 0) : 
-        (item.product?.price_without_cylinder || 0);
-      return total + (price * item.quantity);
-    }, 0);
+
+  // Get cart total for display
+  getCartTotal: async () => {
+    const cart = await cartAPI.getCart();
+    return parseFloat(cart.total_amount) || 0;
   },
+
+  // Get cart item count for badge
+  getCartItemCount: async () => {
+    const cart = await cartAPI.getCart();
+    return cart.item_count || 0;
+  }
 };
 
 // Utility functions
@@ -581,10 +803,11 @@ export const uploadFile = (file: File, uploadUrl: string, onProgress?: (progress
   });
 };
 
-export default api;
+export const healthAPI = {
+  checkBackendHealth: () => api.get('/health/'),
+  checkCartHealth: () => api.get('/orders/cart/health/', { timeout: 5000 })
+};
 
-
-// Add to your api.tsx
 export const safeGasProductsAPI = {
   getGasProducts: async (filters?: GasProductFilters) => {
     try {
@@ -636,3 +859,5 @@ export const safeGasProductsAPI = {
     }
   }
 };
+
+export default api;

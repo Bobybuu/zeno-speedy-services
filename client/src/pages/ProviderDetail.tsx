@@ -190,6 +190,37 @@ const ProviderDetail = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Browse Services handler
+  const handleBrowseServices = () => {
+    if (!vendor) return;
+
+    // Route based on business type
+    switch (vendor.business_type) {
+      case 'gas_station':
+        navigate(`/services/gas/providers/${vendor.id}`, {
+          state: { vendor }
+        });
+        break;
+      case 'mechanic':
+      case 'roadside_assistance':
+        navigate(`/services/roadside/providers/${vendor.id}`, {
+          state: { vendor }
+        });
+        break;
+      case 'hospital':
+        navigate(`/services/oxygen/providers/${vendor.id}`, {
+          state: { vendor }
+        });
+        break;
+      default:
+        // Fallback to generic vendor page
+        navigate(`/vendor/${vendor.id}`, {
+          state: { vendor }
+        });
+        break;
+    }
+  };
+
   useEffect(() => {
     const fetchVendorDetails = async () => {
       try {
@@ -443,7 +474,7 @@ const ProviderDetail = () => {
                   id: Number(vendor!.id),
                   name: vendor!.business_name,
                   location: vendor!.address,
-                  price: "View Services", // Default price text // ✅ FIXED: Added rating property
+                  price: "View Services",
                   coords: [Number(vendor!.latitude), Number(vendor!.longitude)] as [number, number]
                 }]} 
                 userLocation={null}
@@ -596,7 +627,7 @@ const ProviderDetail = () => {
           <Button 
             className="w-full bg-secondary hover:bg-secondary/90"
             size="lg"
-            onClick={() => navigate(`/services/${vendor!.business_type}/${vendor!.id}`)}
+            onClick={handleBrowseServices}
           >
             Browse Services
           </Button>

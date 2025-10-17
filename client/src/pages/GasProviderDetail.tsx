@@ -7,7 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import GasProductCard from "@/components/GasProductCard";
 import BottomNav from "@/components/BottomNav";
-import { gasProductsAPI, vendorsAPI } from "@/services/api"; // ✅ Use gasProductsAPI
+import { gasProductsAPI, vendorsAPI } from "@/services/api";
+import { useCart } from "@/context/CartContext"; // ✅ Add CartContext import
 import { toast } from "sonner";
 
 // Updated interfaces to match your Django API
@@ -63,16 +64,11 @@ interface Vendor {
   longitude?: number;
 }
 
-interface CartItem extends GasProduct {
-  quantity: number;
-  includeCylinder: boolean;
-}
-
 const GasProviderDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const { cartItemCount, cartTotal } = useCart(); // ✅ Use CartContext
   const [vendor, setVendor] = useState<Vendor | null>(null);
   const [gasProducts, setGasProducts] = useState<GasProduct[]>([]);
   const [loading, setLoading] = useState(true);
@@ -252,36 +248,6 @@ const GasProviderDetail = () => {
     priceWithoutCylinder: product.price_without_cylinder
   });
 
-  const handleAddToCart = (product: any, quantity: number, includeCylinder: boolean) => {
-    if (!vendor) return;
-
-    // Find the original product from gasProducts
-    const originalProduct = gasProducts.find(p => p.id === product.id);
-    if (!originalProduct) return;
-
-    setCart(prev => {
-      const existingItem = prev.find(
-        item => item.id === product.id && item.includeCylinder === includeCylinder
-      );
-
-      if (existingItem) {
-        return prev.map(item =>
-          item.id === product.id && item.includeCylinder === includeCylinder
-            ? { ...item, quantity: item.quantity + quantity }
-            : item
-        );
-      }
-
-      return [...prev, { 
-        ...originalProduct, 
-        quantity, 
-        includeCylinder
-      }];
-    });
-
-    toast.success(`Added ${quantity} ${product.name} to cart`);
-  };
-
   const handleOrderNow = (product: any, includeCylinder: boolean) => {
     if (!vendor) return;
 
@@ -306,34 +272,8 @@ const GasProviderDetail = () => {
   };
 
   const handleCheckout = () => {
-    if (cart.length === 0) return;
-
-    const orderItems = cart.map(item => ({
-      productId: item.id,
-      vendorId: vendor?.id || 0,
-      productName: item.name,
-      vendorName: vendor?.business_name || 'Gas Provider',
-      quantity: item.quantity,
-      unitPrice: item.includeCylinder ? item.price_with_cylinder : item.price_without_cylinder,
-      totalAmount: (item.includeCylinder ? item.price_with_cylinder : item.price_without_cylinder) * item.quantity,
-      includeCylinder: item.includeCylinder,
-      description: item.description
-    }));
-
-    navigate('/checkout', {
-      state: {
-        orderItems,
-        totalAmount: cartTotal
-      }
-    });
+    navigate('/checkout');
   };
-
-  const cartTotal = cart.reduce((total, item) => {
-    const price = item.includeCylinder ? item.price_with_cylinder : item.price_without_cylinder;
-    return total + (price * item.quantity);
-  }, 0);
-
-  const cartItemCount = cart.reduce((count, item) => count + item.quantity, 0);
 
   const formatOperatingHours = (hours: any[]) => {
     const today = new Date().getDay();
@@ -464,7 +404,6 @@ const GasProviderDetail = () => {
                 <GasProductCard
                   key={product.id}
                   product={formatProductForCard(product)}
-                  onAddToCart={handleAddToCart}
                   onOrderNow={handleOrderNow}
                   available={product.is_available && product.in_stock}
                 />

@@ -125,7 +125,7 @@ const Map = ({
     try {
       const map = new mapboxgl.Map({
         container: mapContainer.current,
-        style: "mapbox://styles/mapbox/light-v11", // Updated style
+        style: "mapbox://styles/chrispin2005/cmfjcwzm6004s01se01mr59te", // Updated style
         center: center,
         zoom: zoom,
         pitch: 0, // Disable 3D tilt for better performance
@@ -229,20 +229,7 @@ const Map = ({
     }
   }, [userLocation, mapLoaded]);
 
-  if (mapError) {
-    return (
-      <div className="w-full h-full bg-gray-100 rounded-lg flex items-center justify-center">
-        <div className="text-center text-muted-foreground">
-          <div className="text-4xl mb-2">🗺️</div>
-          <p className="font-medium">Map Unavailable</p>
-          <p className="text-sm mt-1 max-w-xs">{mapError}</p>
-          <p className="text-xs mt-2 text-gray-500">
-            This could be due to network issues or missing Mapbox configuration.
-          </p>
-        </div>
-      </div>
-    );
-  }
+
 
   return (
     <div className="relative w-full h-full rounded-lg overflow-hidden border">

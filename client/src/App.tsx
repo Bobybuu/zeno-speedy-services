@@ -4,6 +4,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import { CartProvider } from "./context/CartContext"; // ✅ Import CartProvider
+import { DebugCart } from '@/components/DebugCart';
+
 
 // Layout Components
 import MainLayout from "./layouts/MainLayout";
@@ -14,7 +17,7 @@ import SplashScreen from "./pages/SplashScreen";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import ForgotPassword from "./pages/ForgotPassword";
-import ResetPassword from "./pages/ChangePassword"; // Fixed import name
+import ResetPassword from "./pages/ChangePassword";
 import ChangePassword from "./pages/ChangePassword";
 
 // Main App Pages
@@ -28,26 +31,25 @@ import OxygenServices from "./pages/OxygenServices";
 // Vendor/Service Listing Pages
 import ProviderDetail from "./pages/ProviderDetail";
 import GasProviderDetail from "./pages/GasProviderDetail";
-import GasProductDetail from "./pages/GasServices"; // ✅ ADD THIS IMPORT
 
 // Cart & Payment
 import Cart from "./pages/Cart";
 import Payment from "./pages/Payment";
-import Checkout from "./pages/Checkout"; // ✅ ADD THIS IMPORT
+import Checkout from "./pages/Checkout";
 
 // User Management
 import Account from "./pages/Account";
 import EditProfile from "./pages/EditProfile";
 
 // Vendor Pages
-import VendorDashboard from "./pages/VendorDashboard"; // ✅ ADD THIS IMPORT
+import VendorDashboard from "./pages/VendorDashboard";
 
 // PWA Components
-import { PWAInstallButton } from "@/components/PWAInstallButton"; // ✅ ADD PWA INSTALL BUTTON
-//import { OfflineIndicator } from "@/components/OfflineIndicator"; // ✅ ADD OFFLINE INDICATOR
+import { PWAInstallButton } from "@/components/PWAInstallButton";
 
 // Fallback
 import NotFound from "./pages/NotFound";
+import ErrorBoundary from "./components/ErrorBoundary";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -122,8 +124,7 @@ const AppRoutes = () => {
   return (
     <>
       {/* PWA Components */}
-      {/* <OfflineIndicator /> {/* ✅ Shows when offline */}
-      <PWAInstallButton /> {/* ✅ Handles install prompts */}
+      <PWAInstallButton />
       
       <Routes>
         {/* Splash Screen - Public */}
@@ -176,20 +177,34 @@ const AppRoutes = () => {
           </ProtectedRoute>
         } />
         
-        {/* Vendor & Product Detail Pages - Protected */}
+        {/* Service Provider Routes - Protected */}
+        <Route path="/services/gas/providers/:id" element={
+          <ProtectedRoute>
+            <GasProviderDetail />
+          </ProtectedRoute>
+        } />
+        <Route path="/services/roadside/providers/:id" element={
+          <ProtectedRoute>
+            <ProviderDetail />
+          </ProtectedRoute>
+        } />
+        <Route path="/services/oxygen/providers/:id" element={
+          <ProtectedRoute>
+            <ProviderDetail />
+          </ProtectedRoute>
+        } />
+
+        {/* Generic vendor route fallback */}
         <Route path="/vendor/:id" element={
           <ProtectedRoute>
             <ProviderDetail />
           </ProtectedRoute>
         } />
+        
+        {/* Legacy routes for backward compatibility */}
         <Route path="/services/gas/:id" element={
           <ProtectedRoute>
             <GasProviderDetail />
-          </ProtectedRoute>
-        } />
-        <Route path="/gas-product/:id" element={ // ✅ ADD THIS ROUTE
-          <ProtectedRoute>
-            <GasProductDetail />
           </ProtectedRoute>
         } />
         
@@ -199,7 +214,7 @@ const AppRoutes = () => {
             <Cart />
           </ProtectedRoute>
         } />
-        <Route path="/checkout" element={ // ✅ ADD THIS ROUTE
+        <Route path="/checkout" element={
           <ProtectedRoute>
             <Checkout />
           </ProtectedRoute>
@@ -228,7 +243,7 @@ const AppRoutes = () => {
         } />
 
         {/* Vendor Dashboard - Protected for vendors only*/}
-        <Route path="/vendor/dashboard" element={ // ✅ ADD THIS ROUTE
+        <Route path="/vendor/dashboard" element={
           <ProtectedRoute requiredUserType="vendor">
             <VendorDashboard />
           </ProtectedRoute>
@@ -268,9 +283,12 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
-          <div className="min-h-screen bg-background">
-            <AppRoutes />
-          </div>
+          <CartProvider>
+            <DebugCart /> {/* ✅ Add CartProvider here */}
+            <div className="min-h-screen bg-background">
+              <AppRoutes />
+            </div>
+          </CartProvider>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>

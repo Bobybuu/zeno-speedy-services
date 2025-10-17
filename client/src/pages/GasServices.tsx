@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Map from "@/components/Map";
 import BottomNav from "@/components/BottomNav";
 import { motion } from "framer-motion";
-import { gasProductsAPI, vendorsAPI } from "@/services/api"; // ✅ Use correct APIs
+import { gasProductsAPI, vendorsAPI } from "@/services/api";
 import { toast } from "sonner";
 
 // Updated interface for Gas Products
@@ -73,7 +73,7 @@ const GasServices = () => {
         filters.radius = 20; // 20km radius
       }
 
-      const response = await gasProductsAPI.getGasProducts(filters); // ✅ Use gasProductsAPI
+      const response = await gasProductsAPI.getGasProducts(filters);
       setProducts(response.data);
     } catch (error: any) {
       console.error("Error fetching gas products:", error);
@@ -171,31 +171,24 @@ const GasServices = () => {
     return `KSh ${price.toLocaleString()}`;
   };
 
-  // In GasServices.tsx - Update the click handler
-const handleProductClick = (product: GasProduct) => {
-  // Use a consistent route pattern
-  navigate(`/services/gas/providers/${product.id}`, {
-    state: {
-      product: product,
-      vendor: {
-        id: product.id,
-        business_name: product.vendor_name,
-        address: product.vendor_address,
-        contact_number: product.vendor_contact,
-        city: product.vendor_city,
-        latitude: product.vendor_latitude,
-        longitude: product.vendor_longitude
+  // Updated click handler - FIXED: Use consistent route pattern
+  const handleProductClick = (product: GasProduct) => {
+    navigate(`/services/gas/providers/${product.id}`, {
+      state: {
+        product: product,
+        vendor: {
+          id: product.id,
+          business_name: product.vendor_name,
+          address: product.vendor_address,
+          contact_number: product.vendor_contact,
+          city: product.vendor_city,
+          latitude: product.vendor_latitude,
+          longitude: product.vendor_longitude,
+          business_type: 'gas_station' // Add business_type for consistency
+        }
       }
-    }
-  });
-};
-
-// Also update the vendor card click handlers if you have them
-const handleVendorClick = (vendor: any) => {
-  navigate(`/services/gas/providers/${vendor.id}`, {
-    state: { vendor }
-  });
-};
+    });
+  };
 
   const handleRefresh = () => {
     if (userLocation) {
@@ -457,6 +450,7 @@ const handleVendorClick = (vendor: any) => {
                           className="mt-3 bg-secondary hover:bg-secondary/90 text-white w-full"
                           size="sm"
                           disabled={!product.is_available}
+                          onClick={() => handleProductClick(product)}
                         >
                           {product.is_available ? "View Details & Order" : "Out of Stock"}
                         </Button>
