@@ -462,73 +462,74 @@ const Dashboard = () => {
       </section>
 
       {/* Gas Products Section */}
-      <section className="p-4">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold">Gas Products Near You</h2>
-          <Button 
-            variant="link" 
-            className="text-secondary p-0 h-auto font-semibold"
-            onClick={() => navigate("/services/gas/providers/${product.vendor_id")}
-          >
-            View All
-          </Button>
-        </div>
+<section className="p-4">
+  <div className="flex items-center justify-between mb-4">
+    <h2 className="text-lg font-semibold">Gas Products Near You</h2>
+    <Button 
+      variant="link" 
+      className="text-secondary p-0 h-auto font-semibold"
+      onClick={() => navigate("/services/gas")}
+    >
+      View All
+    </Button>
+  </div>
 
-        {gasProducts.length === 0 ? (
-          <Card className="p-8 text-center">
-            <div className="text-6xl mb-4">🔥</div>
-            <h3 className="text-lg font-semibold mb-2">No gas products found</h3>
-            <p className="text-muted-foreground mb-4">
-              {userLocation 
-                ? "No gas products available in your area yet" 
-                : "Enable location services to see nearby products"
-              }
+  {gasProducts.length === 0 ? (
+    <Card className="p-8 text-center">
+      <div className="text-6xl mb-4">🔥</div>
+      <h3 className="text-lg font-semibold mb-2">No gas products found</h3>
+      <p className="text-muted-foreground mb-4">
+        {userLocation 
+          ? "No gas products available in your area yet" 
+          : "Enable location services to see nearby products"
+        }
+      </p>
+      <Button onClick={() => navigate("/services/gas")}>
+        Browse All Gas Products
+      </Button>
+    </Card>
+  ) : (
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      {gasProducts.map((product, index) => (
+        <motion.div
+          key={product.id}
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: index * 0.05 }}
+        >
+          <Card 
+            className="p-3 cursor-pointer hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border-2 border-transparent hover:border-orange-200"
+            onClick={() => navigate(`/services/gas/${product.id}`)} // Navigate to gas listing page
+          >
+            <div className="aspect-square bg-gradient-to-br from-orange-100 to-orange-50 rounded-lg mb-2 flex items-center justify-center">
+              <span className="text-3xl">🔥</span>
+            </div>
+            <h3 className="font-medium text-sm truncate">{product.name}</h3>
+            <p className="text-xs text-muted-foreground truncate">
+              {product.cylinder_size} • {product.vendor_name}
             </p>
-            <Button onClick={() => navigate("/services/gas")}>
-              Browse All Gas Products
-            </Button>
+            {userLocation && product.vendor_latitude && product.vendor_longitude && (
+              <p className="text-xs text-muted-foreground mt-1">
+                {calculateDistance(
+                  userLocation[0], 
+                  userLocation[1], 
+                  product.vendor_latitude, 
+                  product.vendor_longitude
+                )}
+              </p>
+            )}
+            <div className="flex items-center justify-between mt-2">
+              <span className="text-xs font-semibold text-primary">
+                {formatPrice(product.price_with_cylinder)}
+              </span>
+            </div>
           </Card>
-        ) : (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {gasProducts.map((product, index) => (
-              <motion.div
-                key={product.id}
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: index * 0.05 }}
-              >
-                <Card 
-                  className="p-3 cursor-pointer hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border-2 border-transparent hover:border-orange-200"
-                  onClick={() => handleProductClick(product)}
-                >
-                  <div className="aspect-square bg-gradient-to-br from-orange-100 to-orange-50 rounded-lg mb-2 flex items-center justify-center">
-                    <span className="text-3xl">🔥</span>
-                  </div>
-                  <h3 className="font-medium text-sm truncate">{product.name}</h3>
-                  <p className="text-xs text-muted-foreground truncate">
-                    {product.cylinder_size} • {product.vendor_name}
-                  </p>
-                  {userLocation && product.vendor_latitude && product.vendor_longitude && (
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {calculateDistance(
-                        userLocation[0], 
-                        userLocation[1], 
-                        product.vendor_latitude, 
-                        product.vendor_longitude
-                      )}
-                    </p>
-                  )}
-                  <div className="flex items-center justify-between mt-2">
-                    <span className="text-xs font-semibold text-primary">
-                      {formatPrice(product.price_with_cylinder)}
-                    </span>
-                  </div>
-                </Card>
-              </motion.div>
-            ))}
-          </div>
-        )}
-      </section>
+        </motion.div>
+      ))}
+    </div>
+  )}
+</section>
+
 
       {/* Recent Vendors Section */}
       <section className="p-4">
