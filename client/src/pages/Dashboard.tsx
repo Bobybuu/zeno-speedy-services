@@ -468,7 +468,7 @@ const Dashboard = () => {
           <Button 
             variant="link" 
             className="text-secondary p-0 h-auto font-semibold"
-            onClick={() => navigate("/services/gas")}
+            onClick={() => navigate("/services/gas/providers/${product.vendor_id")}
           >
             View All
           </Button>
