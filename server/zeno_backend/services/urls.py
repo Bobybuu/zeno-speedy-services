@@ -7,6 +7,8 @@ router = DefaultRouter()
 router.register(r'categories', ServiceCategoryViewSet)
 router.register(r'services', ServiceViewSet)
 
+
 urlpatterns = [
     path('', include(router.urls)),
+    path('mapbox-config/', ServiceViewSet.mapbox_config, name='mapbox-config'),
 ]

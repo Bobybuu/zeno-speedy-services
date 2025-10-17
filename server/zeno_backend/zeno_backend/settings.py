@@ -151,7 +151,6 @@ CORS_ALLOWED_ORIGINS = [
     "https://main.d3kz7l97g1hp41.amplifyapp.com",
     "https://www.implimenta.store",
     "https://implimenta.store",
-    ".implimenta.store",
 ]
 
 CORS_ALLOW_CREDENTIALS = True
@@ -161,10 +160,13 @@ TWILIO_ACCOUNT_SID = os.getenv('TWILIO_ACCOUNT_SID', '')
 TWILIO_AUTH_TOKEN = os.getenv('TWILIO_AUTH_TOKEN', '')
 TWILIO_PHONE_NUMBER = os.getenv('TWILIO_PHONE_NUMBER', '')
 
+MAPBOX_ACCESS_TOKEN = os.getenv('MAPBOX_ACCESS_TOKEN', 'pk.eyJ1IjoiY2hyaXNwaW4yMDA1IiwiYSI6ImNtZ253bTZjbjBqbG8yaXF3NGRkMXd5ZTMifQ.5L_2F4m2YFwnplwUiFhHPA')
+MAPBOX_STYLE_URL = os.getenv('MAPBOX_STYLE_URL', 'mapbox://styles/chrispin2005/cmfjcwzm6004s01se01mr59te')
+
 # OTP Settings
 OTP_EXPIRY_MINUTES = 10
 
-DEBUG = False
+DEBUG = True
 
 # Add these security settings
 if not DEBUG:

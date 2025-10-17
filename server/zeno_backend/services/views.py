@@ -1,4 +1,6 @@
 # services/views.py
+from django.http import JsonResponse
+from django.conf import settings
 from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -74,3 +76,12 @@ class ServiceViewSet(viewsets.ModelViewSet):
             serializer.save(vendor=self.request.user.vendor_profile)
         else:
             raise PermissionError("Only vendors can create services")
+        
+    def mapbox_config(request):
+        """
+        API endpoint to provide Mapbox configuration to frontend
+        """
+        return JsonResponse({
+            'accessToken': settings.MAPBOX_ACCESS_TOKEN,
+            'styleUrl': settings.MAPBOX_STYLE_URL,
+        })
