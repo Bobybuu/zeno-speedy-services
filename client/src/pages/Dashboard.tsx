@@ -518,7 +518,11 @@ const Dashboard = () => {
                       )}
                     </p>
                   )}
-                  
+                  <div className="flex items-center justify-between mt-2">
+                    <span className="text-xs font-semibold text-primary">
+                      {formatPrice(product.price_with_cylinder)}
+                    </span>
+                  </div>
                 </Card>
               </motion.div>
             ))}
