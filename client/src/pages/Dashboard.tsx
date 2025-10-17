@@ -518,20 +518,7 @@ const Dashboard = () => {
                       )}
                     </p>
                   )}
-                  <div className="flex items-center justify-between mt-2">
-                    <span className="text-xs font-semibold text-primary">
-                      {formatPrice(product.price_with_cylinder)}
-                    </span>
-                    {product.in_stock && product.stock_quantity > 0 ? (
-                      <span className="text-xs bg-green-100 text-green-800 px-1 py-0.5 rounded">
-                        In Stock
-                      </span>
-                    ) : (
-                      <span className="text-xs bg-red-100 text-red-800 px-1 py-0.5 rounded">
-                        Out of Stock
-                      </span>
-                    )}
-                  </div>
+                  
                 </Card>
               </motion.div>
             ))}
