@@ -1,7 +1,6 @@
 # orders/models.py
 from django.db import models
 from django.contrib.auth import get_user_model
-from django.conf import settings
 
 User = get_user_model()
 
@@ -169,37 +168,3 @@ class OrderTracking(models.Model):
     
     class Meta:
         ordering = ['-created_at']
-        
-# orders/models.py - Update CartItem model
-class CartItem(models.Model):
-    cart = models.ForeignKey(Cart, on_delete=models.CASCADE, related_name='items')
-    item_type = models.CharField(max_length=20, choices=[
-        ('service', 'Service'),
-        ('gas_product', 'Gas Product')
-    ], default='service')
-    service = models.ForeignKey('services.Service', on_delete=models.CASCADE, 
-                               null=True, blank=True)
-    gas_product = models.ForeignKey('vendors.GasProduct', on_delete=models.CASCADE,
-                                   null=True, blank=True)
-    quantity = models.PositiveIntegerField(default=1)
-    added_at = models.DateTimeField(auto_now_add=True)
-    
-    @property
-    def unit_price(self):
-        if self.service:
-            return self.service.price
-        elif self.gas_product:
-            return self.gas_product.price_with_cylinder
-        return 0
-    
-    @property
-    def total_price(self):
-        return self.unit_price * self.quantity
-    
-    @property
-    def item_name(self):
-        if self.service:
-            return self.service.name
-        elif self.gas_product:
-            return self.gas_product.name
-        return "Unknown Item"
