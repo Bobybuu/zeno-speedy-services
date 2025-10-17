@@ -578,14 +578,7 @@ const Payment = () => {
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <h1 className="text-xl font-semibold">Payment</h1>
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={debugEndpoints}
-            className="text-white border-white ml-auto"
-          >
-            Debug
-          </Button>
+          
         </div>
       </header>
 
