@@ -154,3 +154,15 @@ TWILIO_PHONE_NUMBER = os.getenv('TWILIO_PHONE_NUMBER', '')
 
 # OTP Settings
 OTP_EXPIRY_MINUTES = 10
+
+DEBUG = False
+
+# Add these security settings
+if not DEBUG:
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_BROWSER_XSS_FILTER = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    
+CORS_ALLOW_ALL_ORIGINS = False
