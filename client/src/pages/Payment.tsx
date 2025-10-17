@@ -464,8 +464,8 @@ const Payment = () => {
     console.log('🔍 Manual endpoint debugging triggered...');
     
     const endpoints = [
-      'http://127.0.0.1:8000/api/payments/',
-      'http://127.0.0.1:8000/api/payments/initiate-payment/',
+      'https://api.implimenta.store/api/payments/',
+      'https://api.implimenta.store/api/payments/initiate-payment/',
     ];
 
     const token = localStorage.getItem('access_token');
