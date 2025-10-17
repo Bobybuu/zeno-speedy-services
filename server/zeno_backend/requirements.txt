@@ -17,3 +17,4 @@ urllib3<1.27,>=1.25.4
 Django==4.2.16
 djangorestframework-simplejwt==5.3.1
 python-dotenv==1.0.1
+twilio==9.0.0
