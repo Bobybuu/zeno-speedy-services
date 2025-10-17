@@ -176,21 +176,7 @@ const Login = () => {
             
             {/* Quick Test Buttons */}
             <div className="flex gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="flex-1 text-xs"
-                onClick={() => {
-                  setFormData({
-                    phone_number: "+254712345678",
-                    password: "password123"
-                  });
-                  toast.info("Demo credentials filled. Click Login to test.");
-                }}
-              >
-                Fill Demo
-              </Button>
+             
               <Button
                 type="button"
                 variant="outline"
