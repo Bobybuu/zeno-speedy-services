@@ -152,7 +152,7 @@ const Payment = () => {
       console.log('🔍 Looking for existing payment for order:', orderId);
       
       // Try to get payment details from the orders endpoint
-      const orderResponse = await fetch(`http://127.0.0.1:8000/api/orders/orders/${orderId}/`, {
+      const orderResponse = await fetch(`https://api.implimenta.store/api/orders/orders/${orderId}/`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -168,7 +168,7 @@ const Payment = () => {
           console.log('✅ Order payment status:', orderData.payment_status);
           
           // Try to find the payment ID from payments endpoint
-          const paymentsResponse = await fetch('http://127.0.0.1:8000/api/payments/payments/', {
+          const paymentsResponse = await fetch('https://api.implimenta.store/api/payments/payments/', {
             headers: {
               'Authorization': `Bearer ${token}`,
               'Content-Type': 'application/json'
@@ -238,7 +238,7 @@ const Payment = () => {
       console.log('💰 Using phone number:', formattedPhone);
 
       // Use the correct payment endpoint
-      const paymentEndpoint = 'http://127.0.0.1:8000/api/payments/initiate-payment/';
+      const paymentEndpoint = 'https://api.implimenta.store/api/payments/initiate-payment/';
 
       const paymentPayload = {
         order_id: orderId,
@@ -356,7 +356,7 @@ const Payment = () => {
       try {
         const token = localStorage.getItem('access_token');
         
-        const statusEndpoint = `http://127.0.0.1:8000/api/payments/payment-status/${paymentId}/`;
+        const statusEndpoint = `https://api.implimenta.store/api/payments/payment-status/${paymentId}/`;
         
         console.log(`💰 Polling payment status via: ${statusEndpoint}`);
         
