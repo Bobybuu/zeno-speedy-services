@@ -91,7 +91,7 @@ DATABASES = {
         'NAME': 'zeno_roadside',
         'USER': 'postgres',
         'PASSWORD': 'Chrispine9909',
-        'HOST': '',
+        'HOST': 'zeno.czq8ae44qs94.us-east-2.rds.amazonaws.com',
         'PORT': '5432',
     }
 }
