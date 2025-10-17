@@ -188,7 +188,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       });
 
       // Use the correct endpoint from your API
-      const orderEndpoint = 'https://3.143.233.106/api/orders/orders/';
+      const orderEndpoint = 'https://api.implimenta.store/api/orders/orders/';
 
       // Create order payload according to CreateMixedOrderSerializer in Django
       const orderPayload = {
