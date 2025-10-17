@@ -2,9 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 
-// Set Mapbox token globally
-mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN || 'your-mapbox-token-here';
-
 interface Provider {
   id: number;
   name: string;
@@ -22,6 +19,11 @@ interface MapProps {
   zoom?: number;
 }
 
+interface MapboxConfig {
+  accessToken: string;
+  styleUrl: string;
+}
+
 const Map = ({
   providers = [],
   center = [36.817223, -1.286389], // ✅ FIXED: [lng, lat] format (Nairobi)
@@ -33,6 +35,39 @@ const Map = ({
   const markersRef = useRef<mapboxgl.Marker[]>([]);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
+  const [mapboxConfig, setMapboxConfig] = useState<MapboxConfig | null>(null);
+
+  // Fetch Mapbox configuration from backend
+  useEffect(() => {
+    const fetchMapboxConfig = async () => {
+      try {
+        const response = await fetch('https://api.implimenta.store/api/services/mapbox-config/');
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const config: MapboxConfig = await response.json();
+        setMapboxConfig(config);
+        
+        // Set Mapbox token globally
+        mapboxgl.accessToken = config.accessToken;
+      } catch (error) {
+        console.error('Failed to fetch Mapbox config:', error);
+        setMapError('Failed to load map configuration');
+        
+        // Fallback to environment variable if available
+        const fallbackToken = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN || process.env.REACT_APP_MAPBOX_ACCESS_TOKEN;
+        if (fallbackToken) {
+          mapboxgl.accessToken = fallbackToken;
+          setMapboxConfig({
+            accessToken: fallbackToken,
+            styleUrl: import.meta.env.VITE_MAPBOX_STYLE_URL || process.env.REACT_APP_MAPBOX_STYLE_URL || 'mapbox://styles/mapbox/streets-v12'
+          });
+        }
+      }
+    };
+
+    fetchMapboxConfig();
+  }, []);
 
   // Clear all markers
   const clearMarkers = () => {
@@ -112,12 +147,12 @@ const Map = ({
     }
   };
 
-  // Initialize map
+  // Initialize map only when config is available
   useEffect(() => {
-    if (!mapContainer.current) return;
+    if (!mapContainer.current || !mapboxConfig) return;
 
     // Check if Mapbox token is available
-    if (!mapboxgl.accessToken) {
+    if (!mapboxgl.accessToken || mapboxgl.accessToken === 'your-mapbox-token-here') {
       setMapError('Mapbox access token not configured');
       return;
     }
@@ -125,12 +160,12 @@ const Map = ({
     try {
       const map = new mapboxgl.Map({
         container: mapContainer.current,
-        style: "mapbox://styles/chrispin2005/cmfjcwzm6004s01se01mr59te", // Updated style
+        style: mapboxConfig.styleUrl,
         center: center,
         zoom: zoom,
-        pitch: 0, // Disable 3D tilt for better performance
-        bearing: 0, // Disable rotation
-        antialias: false, // Better performance
+        pitch: 0,
+        bearing: 0,
+        antialias: false,
       });
 
       mapRef.current = map;
@@ -148,11 +183,9 @@ const Map = ({
 
         // Handle user location
         if (userLocation) {
-          // Use provided user location
           addUserMarker(map, userLocation);
           map.flyTo({ center: userLocation, zoom: 14 });
         } else {
-          // Try to get user location
           if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
               (position) => {
@@ -163,12 +196,11 @@ const Map = ({
               },
               (error) => {
                 console.warn("Geolocation failed:", error);
-                // Continue without user location
               },
               { 
                 enableHighAccuracy: true,
                 timeout: 10000,
-                maximumAge: 300000 // 5 minutes cache
+                maximumAge: 300000
               }
             );
           }
@@ -178,14 +210,7 @@ const Map = ({
       // Handle map errors
       map.on('error', (e) => {
         console.error('Map error:', e);
-        setMapError('Failed to load map');
-      });
-
-      // Handle render errors
-      map.on('render', () => {
-        if (!map.loaded()) {
-          setMapError('Map is still loading...');
-        }
+        setMapError('Failed to load map. Please check your Mapbox configuration.');
       });
 
       // Cleanup function
@@ -201,7 +226,7 @@ const Map = ({
       console.error("Map initialization error:", error);
       setMapError('Failed to initialize map');
     }
-  }, []); // Empty dependency array - map initialized once
+  }, [mapboxConfig]); // Initialize map when config is available
 
   // Update markers when providers change
   useEffect(() => {
@@ -214,7 +239,6 @@ const Map = ({
   // Update user location
   useEffect(() => {
     if (mapRef.current && mapLoaded && userLocation) {
-      // Clear existing user markers
       const userMarkers = markersRef.current.filter(marker => 
         marker.getElement().classList.contains('user-marker')
       );
@@ -223,13 +247,22 @@ const Map = ({
         markersRef.current = markersRef.current.filter(m => m !== marker);
       });
 
-      // Add new user marker
       addUserMarker(mapRef.current, userLocation);
       mapRef.current.flyTo({ center: userLocation, zoom: 14 });
     }
   }, [userLocation, mapLoaded]);
 
-
+  // Show loading state while fetching config
+  if (!mapboxConfig && !mapError) {
+    return (
+      <div className="relative w-full h-full rounded-lg overflow-hidden border bg-gray-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2"></div>
+          <p className="text-sm text-gray-600">Loading map configuration...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative w-full h-full rounded-lg overflow-hidden border">
@@ -243,16 +276,34 @@ const Map = ({
       {!mapLoaded && !mapError && (
         <div className="absolute inset-0 bg-gray-100 flex items-center justify-center">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
-            <p className="text-sm text-muted-foreground">Loading map...</p>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2"></div>
+            <p className="text-sm text-gray-600">Loading map...</p>
+          </div>
+        </div>
+      )}
+
+      {/* Error overlay */}
+      {mapError && (
+        <div className="absolute inset-0 bg-red-50 flex items-center justify-center">
+          <div className="text-center">
+            <div className="text-red-500 text-lg mb-2">⚠️</div>
+            <p className="text-sm text-red-700">{mapError}</p>
+            <button 
+              onClick={() => window.location.reload()}
+              className="mt-2 px-4 py-2 bg-red-500 text-white rounded text-sm hover:bg-red-600"
+            >
+              Retry
+            </button>
           </div>
         </div>
       )}
 
       {/* Map attribution */}
-      <div className="absolute bottom-2 left-2 text-xs text-gray-500 bg-white/80 px-2 py-1 rounded">
-        © Mapbox © OpenStreetMap
-      </div>
+      {mapLoaded && (
+        <div className="absolute bottom-2 left-2 text-xs text-gray-500 bg-white/80 px-2 py-1 rounded">
+          © Mapbox © OpenStreetMap
+        </div>
+      )}
     </div>
   );
 };
