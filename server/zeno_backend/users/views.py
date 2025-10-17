@@ -16,6 +16,8 @@ from django.core.mail import send_mail
 from django.utils import timezone
 from datetime import timedelta
 from .models import User
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
 from .serializers import (
     UserRegistrationSerializer, 
     UserLoginSerializer, 
@@ -405,4 +407,11 @@ class ResetPasswordView(APIView):
             return Response({'error': 'Invalid or expired reset token'}, 
                           status=status.HTTP_400_BAD_REQUEST)
     
+@csrf_exempt
+def health_check(request):
+    return JsonResponse({
+        "status": "healthy", 
+        "service": "Zeno Speedy Services API",
+        "timestamp": timezone.now().isoformat()
+    })
     
