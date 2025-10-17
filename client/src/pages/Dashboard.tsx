@@ -387,7 +387,7 @@ const Dashboard = () => {
               <Menu className="h-5 w-5" />
             </Button>
             <div>
-              <h1 className="text-xl font-bold">zeNO</h1>
+              <h1 className="text-xl font-bold">zeno</h1>
               <div className="flex items-center text-xs text-white/80">
                 <MapPin className="h-3 w-3 mr-1" />
                 <span>
