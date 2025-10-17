@@ -151,6 +151,7 @@ CORS_ALLOWED_ORIGINS = [
     "https://main.d3kz7l97g1hp41.amplifyapp.com",
     "https://www.implimenta.store",
     "https://implimenta.store",
+    ".implimenta.store",
 ]
 
 CORS_ALLOW_CREDENTIALS = True
