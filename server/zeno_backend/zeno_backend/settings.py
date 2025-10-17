@@ -14,7 +14,15 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-&(brk+r7k8(30-h7t)vf$^@&7zx_l!*$+3tb8aqq*#a2j!)jmi')
 DEBUG = os.getenv('DJANGO_DEBUG', 'True').lower() == 'true'
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',') if os.getenv('ALLOWED_HOSTS') else []
+ALLOWED_HOSTS = [
+    'localhost',
+    '127.0.0.1',
+    '3.143.233.106',
+    'implimenta.store',
+    'www.implimenta.store',
+    '.implimenta.store',
+    'main.d3kz7l97g1hp41.amplifyapp.com',
+]
 
 # Application definition
 INSTALLED_APPS = [
