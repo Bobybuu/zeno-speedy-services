@@ -24,5 +24,14 @@ class OrderTrackingAdmin(admin.ModelAdmin):
     list_filter = ['status', 'created_at']
     readonly_fields = ['created_at']
 
-admin.site.register(Cart)
-admin.site.register(CartItem)
+@admin.register(Cart)
+class CartAdmin(admin.ModelAdmin):
+    list_display = ['id', 'customer', 'created_at', 'updated_at']
+    list_filter = ['created_at']
+    readonly_fields = ['created_at', 'updated_at']
+
+@admin.register(CartItem)
+class CartItemAdmin(admin.ModelAdmin):
+    list_display = ['id', 'cart', 'service', 'quantity', 'created_at']
+    list_filter = ['created_at']
+    readonly_fields = ['created_at']
