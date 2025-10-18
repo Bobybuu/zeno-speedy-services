@@ -80,7 +80,7 @@ const Login = () => {
         <Card className="border-0 shadow-xl">
           <CardHeader className="space-y-1 text-center">
             <div className="mb-4">
-              <h1 className="text-4xl font-bold text-primary">zeno</h1>
+              <h1 className="text-4xl font-bold text-primary">ZENO</h1>
               <p className="text-sm text-muted-foreground">Trusted Reliable Services</p>
             </div>
             <CardTitle className="text-2xl">Welcome back</CardTitle>
@@ -155,15 +155,7 @@ const Login = () => {
               </Button>
             </form>
 
-            {/* Phone Login Info */}
-            <div className="mt-6 p-4 bg-muted/30 rounded-lg border">
-              <h4 className="text-sm font-semibold mb-2 text-center">Phone Login Only</h4>
-              <div className="text-xs text-muted-foreground space-y-1">
-                <p>• Use your registered phone number</p>
-                <p>• Include country code (e.g., +254...)</p>
-                <p>• OTP will be sent to your phone</p>
-              </div>
-            </div>
+            
           </CardContent>
           
           <div className="px-6 pb-6">
