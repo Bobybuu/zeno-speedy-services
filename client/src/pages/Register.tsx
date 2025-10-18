@@ -304,7 +304,7 @@ const Register = () => {
                   name="userType"
                   value={formData.userType}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-secondary"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-secondary text-gray-900"
                 >
                   <option value="customer">Customer</option>
                   <option value="vendor">Service Vendor</option>
