@@ -365,7 +365,6 @@ const Register = () => {
               <div className="text-xs text-muted-foreground space-y-1">
                 <p>• Your phone number is your login ID</p>
                 <p>• OTP will be sent for verification</p>
-                <p>• No email required</p>
               </div>
             </div>
           </CardContent>
