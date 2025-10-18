@@ -239,11 +239,11 @@ const Register = () => {
           <CardHeader className="space-y-1 text-center">
             <div className="mb-4">
               <h1 className="text-4xl font-bold text-primary">ZENO</h1>
-              <p className="text-sm text-muted-foreground">Trusted Reliable Services</p>
+              <p className="text-sm text-muted-foreground">Services You Can Count On</p>
             </div>
             <CardTitle className="text-2xl">Create Account</CardTitle>
             <CardDescription>
-              Join thousands of users trusting zeNO services
+              Join thousands of users trusting ZENO services
             </CardDescription>
           </CardHeader>
           <CardContent>
