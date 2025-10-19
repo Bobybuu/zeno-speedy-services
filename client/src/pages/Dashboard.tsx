@@ -445,7 +445,7 @@ const Dashboard = () => {
         </div>
       </section>
 
-      {/* Gas Products Section */}
+{/* Gas Products Section */}
 <section className="p-4">
   <div className="flex items-center justify-between mb-4">
     <h2 className="text-lg font-semibold">Gas Products Near You</h2>

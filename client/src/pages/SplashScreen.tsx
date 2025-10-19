@@ -22,7 +22,7 @@ const SplashScreen = () => {
         className="text-center"
       >
         <h1 className="text-6xl md:text-8xl font-bold text-white mb-4">
-          zeno
+          ZENO
         </h1>
         <p className="text-xl md:text-2xl text-white/90 font-medium mb-8">
           Speed You Trust, Services You Count On

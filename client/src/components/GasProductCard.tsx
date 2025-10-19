@@ -21,6 +21,7 @@ interface GasProductCardProps {
   available: boolean;
 }
 
+
 const GasProductCard = ({ product, onOrderNow, available }: GasProductCardProps) => {
   const [quantity, setQuantity] = useState(1);
   const [includeCylinder, setIncludeCylinder] = useState(false);
