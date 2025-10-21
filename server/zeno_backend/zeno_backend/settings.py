@@ -22,6 +22,9 @@ ALLOWED_HOSTS = [
     'www.implimenta.store',
     '.implimenta.store',
     'main.d3kz7l97g1hp41.amplifyapp.com',
+    'api.zenoservices.co.ke',
+    'www.api.zenoservices.co.ke',
+    'ec2-3-143-233-106.us-east-2.compute.amazonaws.com'
 ]
 
 # Application definition
@@ -151,6 +154,9 @@ CORS_ALLOWED_ORIGINS = [
     "https://main.d3kz7l97g1hp41.amplifyapp.com",
     "https://www.implimenta.store",
     "https://implimenta.store",
+    "https://zenoservices.co.ke",
+    "https://www.zenoservices.co.ke",
+
 ]
 
 CORS_ALLOW_CREDENTIALS = True
