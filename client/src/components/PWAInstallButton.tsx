@@ -109,14 +109,7 @@ export const PWAInstallButton: React.FC = () => {
   };
 
   // Don't show anything if installed or not installable
-  if (isInstalled) {
-    return (
-      <Badge variant="secondary" className="flex items-center gap-1">
-        <CheckCircle className="h-3 w-3" />
-        Installed
-      </Badge>
-    );
-  }
+  
 
   return (
     <>
