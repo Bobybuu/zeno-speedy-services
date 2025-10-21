@@ -166,19 +166,7 @@ const Login = () => {
               </Link>
             </div>
             
-            {/* Quick Test Buttons */}
-            <div className="flex gap-2">
-             
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="flex-1 text-xs"
-                onClick={() => setFormData({ phone_number: "", password: "" })}
-              >
-                Clear
-              </Button>
-            </div>
+          
           </div>
         </Card>
       </motion.div>
