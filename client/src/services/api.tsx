@@ -1,7 +1,7 @@
 // src/services/api.tsx
 import axios from 'axios';
 
-const API_BASE_URL = 'https://api.implimenta.store/api';
+const API_BASE_URL = 'https://api.zenoservices.co.ke/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,

@@ -57,12 +57,12 @@ export const formatImageUrl = (imagePath: string): string | null => {
   
   // Handle different image path formats
   if (imagePath.startsWith('/media/') || imagePath.startsWith('/static/')) {
-    return `https://api.implimenta.store${imagePath}`;
+    return `https://api.zenoservices.co.ke/${imagePath}`;
   }
   
   if (imagePath.startsWith('media/') || imagePath.startsWith('static/')) {
-    return `https://api.implimenta.store/${imagePath}`;
+    return `https://api.zenoservices.co.ke/${imagePath}`;
   }
-  
-  return `https://api.implimenta.store/media/${imagePath}`;
+
+  return `https://api.zenoservices.co.ke/media/${imagePath}`;
 };
