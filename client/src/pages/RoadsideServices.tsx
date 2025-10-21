@@ -38,6 +38,13 @@ interface ServiceCategory {
   business_types: string[];
 }
 
+interface ApiResponse {
+  results?: ServiceProvider[];
+  count?: number;
+  next?: string;
+  previous?: string;
+}
+
 const RoadsideServices = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -103,7 +110,6 @@ const RoadsideServices = () => {
       // Get all roadside-related business types
       const businessTypes = ['mechanic', 'roadside_assistance', 'gas_station'];
       
-      // FIXED: Use the correct API endpoint structure
       const baseUrl = 'https://api.zenoservices.co.ke/api';
       const params = new URLSearchParams({
         business_type__in: businessTypes.join(',')
@@ -126,9 +132,25 @@ const RoadsideServices = () => {
       });
 
       if (response.ok) {
-        const providersData = await response.json();
-        console.log('Fetched providers:', providersData);
-        setProviders(providersData.results || providersData); // Handle both paginated and non-paginated responses
+        const data: ApiResponse | ServiceProvider[] = await response.json();
+        console.log('Fetched providers data:', data);
+        
+        // FIXED: Handle different response formats
+        let providersData: ServiceProvider[] = [];
+        
+        if (Array.isArray(data)) {
+          // If response is directly an array
+          providersData = data;
+        } else if (data && typeof data === 'object' && 'results' in data) {
+          // If response is paginated with results field
+          providersData = data.results || [];
+        } else if (data && typeof data === 'object') {
+          // If response is a single object, wrap it in array
+          providersData = [data as ServiceProvider];
+        }
+        
+        console.log('Processed providers:', providersData);
+        setProviders(providersData);
       } else if (response.status === 404) {
         // If the main vendors endpoint fails, try alternative endpoints
         await fetchAlternativeEndpoints();
@@ -173,9 +195,19 @@ const RoadsideServices = () => {
           });
 
           if (response.ok) {
-            const data = await response.json();
-            const providersData = data.results || data;
-            console.log('Success with endpoint:', endpoint, providersData);
+            const data: ApiResponse | ServiceProvider[] = await response.json();
+            console.log('Success with endpoint:', endpoint, data);
+            
+            let providersData: ServiceProvider[] = [];
+            
+            if (Array.isArray(data)) {
+              providersData = data;
+            } else if (data && typeof data === 'object' && 'results' in data) {
+              providersData = data.results || [];
+            } else if (data && typeof data === 'object') {
+              providersData = [data as ServiceProvider];
+            }
+            
             setProviders(providersData);
             return; // Success, exit the function
           }
@@ -308,9 +340,15 @@ const RoadsideServices = () => {
   };
 
   const getServicePrice = (provider: ServiceProvider): string => {
-    if (provider.services.length === 0) return "Contact for pricing";
+    if (!provider.services || provider.services.length === 0) return "Contact for pricing";
     
-    const minPrice = Math.min(...provider.services.map(s => parseFloat(s.price)));
+    const prices = provider.services
+      .map(s => parseFloat(s.price))
+      .filter(price => !isNaN(price));
+    
+    if (prices.length === 0) return "Contact for pricing";
+    
+    const minPrice = Math.min(...prices);
     return `From KSh ${minPrice.toLocaleString()}`;
   };
 
@@ -326,35 +364,61 @@ const RoadsideServices = () => {
   };
 
   const getProviderCoordinates = (provider: ServiceProvider): [number, number] => {
-    return [
-      parseFloat(provider.longitude) || 36.817223, // Note: longitude first for Mapbox
-      parseFloat(provider.latitude) || -1.286389   // latitude second
-    ];
+    // FIXED: Handle invalid coordinates
+    const lat = parseFloat(provider.latitude);
+    const lng = parseFloat(provider.longitude);
+    
+    if (isNaN(lat) || isNaN(lng)) {
+      // Default to Nairobi coordinates if invalid
+      return [36.817223, -1.286389];
+    }
+    
+    return [lng, lat]; // Note: longitude first for Mapbox
   };
 
-  // FIXED: Added price property to match Map component's Provider interface
+  // FIXED: Added proper error handling for map providers
   const getMapProviders = () => {
-    return getFilteredProviders().map(provider => ({
-      id: provider.id,
-      name: provider.business_name,
-      location: provider.address,
-      coords: getProviderCoordinates(provider),
-      price: getServicePrice(provider), // Added required price property
-      rating: parseFloat(provider.average_rating),
-      distance: userLocation 
-        ? calculateDistance(
-            userLocation.lat, 
-            userLocation.lng, 
-            parseFloat(provider.latitude) || 0, 
-            parseFloat(provider.longitude) || 0
-          )
-        : "Unknown"
-    }));
+    const filteredProviders = getFilteredProviders();
+    
+    if (!Array.isArray(filteredProviders)) {
+      console.error('Filtered providers is not an array:', filteredProviders);
+      return [];
+    }
+    
+    return filteredProviders.map(provider => {
+      try {
+        return {
+          id: provider.id,
+          name: provider.business_name,
+          location: provider.address,
+          coords: getProviderCoordinates(provider),
+          price: getServicePrice(provider),
+          rating: parseFloat(provider.average_rating) || 0,
+          distance: userLocation 
+            ? calculateDistance(
+                userLocation.lat, 
+                userLocation.lng, 
+                parseFloat(provider.latitude) || 0, 
+                parseFloat(provider.longitude) || 0
+              )
+            : "Unknown"
+        };
+      } catch (error) {
+        console.error('Error processing provider for map:', provider, error);
+        return null;
+      }
+    }).filter(Boolean); // Remove any null entries
   };
 
   const refreshProviders = () => {
     setLoading(true);
     fetchRoadsideProviders();
+  };
+
+  // FIXED: Added safe provider count calculation
+  const getProviderCount = (businessTypes: string[]) => {
+    if (!Array.isArray(providers)) return 0;
+    return providers.filter(p => businessTypes.includes(p.business_type)).length;
   };
 
   if (loading) {
@@ -412,9 +476,7 @@ const RoadsideServices = () => {
         <div className="grid grid-cols-3 gap-3 mb-6">
           {serviceCategories.map((service) => {
             const Icon = service.icon;
-            const providerCount = providers.filter(p => 
-              service.business_types.includes(p.business_type)
-            ).length;
+            const providerCount = getProviderCount(service.business_types);
 
             return (
               <motion.div
@@ -455,11 +517,11 @@ const RoadsideServices = () => {
                 : "All Roadside Providers"}
             </h3>
             <span className="text-sm text-muted-foreground">
-              {getFilteredProviders().length} providers
+              {Array.isArray(providers) ? getFilteredProviders().length : 0} providers
             </span>
           </div>
 
-          {getFilteredProviders().length === 0 ? (
+          {!Array.isArray(providers) || getFilteredProviders().length === 0 ? (
             <Card className="p-8 text-center">
               <Wrench className="h-12 w-12 text-muted-foreground/50 mx-auto mb-4" />
               <h3 className="font-semibold mb-2">No Providers Found</h3>
@@ -516,9 +578,9 @@ const RoadsideServices = () => {
                         <div className="flex items-center gap-2 text-sm mb-2">
                           <div className="flex items-center gap-1">
                             <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                            <span>{parseFloat(provider.average_rating).toFixed(1)}</span>
+                            <span>{(parseFloat(provider.average_rating) || 0).toFixed(1)}</span>
                             <span className="text-muted-foreground">
-                              ({provider.total_reviews})
+                              ({provider.total_reviews || 0})
                             </span>
                           </div>
                         </div>
@@ -527,7 +589,7 @@ const RoadsideServices = () => {
                           {getServicePrice(provider)}
                         </p>
 
-                        {provider.services.length > 0 && (
+                        {provider.services && provider.services.length > 0 && (
                           <div className="flex gap-1 mt-2 overflow-x-auto">
                             {provider.services.slice(0, 3).map(service => (
                               <span 
