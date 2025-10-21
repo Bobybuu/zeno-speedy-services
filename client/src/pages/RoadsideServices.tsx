@@ -177,12 +177,23 @@ const RoadsideServices = () => {
     ];
   };
 
+  // FIXED: Added price property to match Map component's Provider interface
   const getMapProviders = () => {
     return getFilteredProviders().map(provider => ({
       id: provider.id,
       name: provider.business_name,
       location: provider.address,
-      coords: getProviderCoordinates(provider)
+      coords: getProviderCoordinates(provider),
+      price: getServicePrice(provider), // Added required price property
+      rating: parseFloat(provider.average_rating),
+      distance: userLocation 
+        ? calculateDistance(
+            userLocation.lat, 
+            userLocation.lng, 
+            parseFloat(provider.latitude) || 0, 
+            parseFloat(provider.longitude) || 0
+          )
+        : "Unknown"
     }));
   };
 
