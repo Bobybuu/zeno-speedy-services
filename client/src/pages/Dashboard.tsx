@@ -383,9 +383,7 @@ const Dashboard = () => {
       <header className="sticky top-0 z-40 bg-primary text-white shadow-lg">
         <div className="flex items-center justify-between p-4">
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" className="text-white hover:bg-white/20">
-              <Menu className="h-5 w-5" />
-            </Button>
+            
             <div>
               <h1 className="text-xl font-bold">zeno</h1>
               <div className="flex items-center text-xs text-white/80">
