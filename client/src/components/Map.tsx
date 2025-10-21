@@ -41,7 +41,7 @@ const Map = ({
   useEffect(() => {
     const fetchMapboxConfig = async () => {
       try {
-        const response = await fetch('https://api.implimenta.store/api/services/mapbox-config/');
+        const response = await fetch('https://api.zenoservices.co.ke/api/services/mapbox-config/');
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
