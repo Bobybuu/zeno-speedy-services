@@ -464,8 +464,8 @@ const Payment = () => {
     console.log('🔍 Manual endpoint debugging triggered...');
     
     const endpoints = [
-      'https://api.implimenta.store/api/payments/',
-      'https://api.implimenta.store/api/payments/initiate-payment/',
+      'https://api.zenoservices.co.ke/api/payments/',
+      'https://api.zenoservices.co.ke/api/payments/initiate-payment/',
     ];
 
     const token = localStorage.getItem('access_token');
