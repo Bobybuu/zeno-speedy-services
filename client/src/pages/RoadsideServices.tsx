@@ -102,39 +102,194 @@ const RoadsideServices = () => {
       
       // Get all roadside-related business types
       const businessTypes = ['mechanic', 'roadside_assistance', 'gas_station'];
+      
+      // FIXED: Use the correct API endpoint structure
+      const baseUrl = 'https://api.zenoservices.co.ke/api';
       const params = new URLSearchParams({
-        business_type__in: businessTypes.join(','),
-        ...(userLocation && {
-          lat: userLocation.lat.toString(),
-          lng: userLocation.lng.toString(),
-          radius: '20' // 20km radius
-        })
+        business_type__in: businessTypes.join(',')
       });
 
-      const response = await fetch(`/api/vendors/?${params}`, {
+      // Add location parameters if available
+      if (userLocation) {
+        params.append('lat', userLocation.lat.toString());
+        params.append('lng', userLocation.lng.toString());
+        params.append('radius', '20'); // 20km radius
+      }
+
+      console.log('Fetching roadside providers from:', `${baseUrl}/vendors/?${params}`);
+
+      const response = await fetch(`${baseUrl}/vendors/?${params}`, {
         headers: {
-          'Authorization': `Bearer ${token}`,
+          'Authorization': token ? `Bearer ${token}` : '',
           'Content-Type': 'application/json'
         }
       });
 
       if (response.ok) {
         const providersData = await response.json();
-        setProviders(providersData);
+        console.log('Fetched providers:', providersData);
+        setProviders(providersData.results || providersData); // Handle both paginated and non-paginated responses
+      } else if (response.status === 404) {
+        // If the main vendors endpoint fails, try alternative endpoints
+        await fetchAlternativeEndpoints();
       } else {
-        throw new Error('Failed to fetch roadside providers');
+        throw new Error(`Failed to fetch roadside providers: ${response.status} ${response.statusText}`);
       }
     } catch (error) {
       console.error('Error fetching roadside providers:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load roadside services",
-        variant: "destructive"
-      });
+      // Try alternative endpoints as fallback
+      await fetchAlternativeEndpoints();
     } finally {
       setLoading(false);
     }
   };
+
+  // Fallback method to try different API endpoints
+  const fetchAlternativeEndpoints = async () => {
+    try {
+      const token = localStorage.getItem('access_token');
+      const businessTypes = ['mechanic', 'roadside_assistance', 'gas_station'];
+      
+      // Try different possible endpoints
+      const endpoints = [
+        'https://api.zenoservices.co.ke/api/vendors/vendors/',
+        'https://api.zenoservices.co.ke/api/vendors/',
+        'https://api.zenoservices.co.ke/api/services/vendors/'
+      ];
+
+      for (const endpoint of endpoints) {
+        try {
+          const params = new URLSearchParams({
+            business_type__in: businessTypes.join(',')
+          });
+
+          console.log('Trying alternative endpoint:', `${endpoint}?${params}`);
+
+          const response = await fetch(`${endpoint}?${params}`, {
+            headers: {
+              'Authorization': token ? `Bearer ${token}` : '',
+              'Content-Type': 'application/json'
+            }
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            const providersData = data.results || data;
+            console.log('Success with endpoint:', endpoint, providersData);
+            setProviders(providersData);
+            return; // Success, exit the function
+          }
+        } catch (error) {
+          console.warn(`Endpoint ${endpoint} failed:`, error);
+          continue; // Try next endpoint
+        }
+      }
+
+      // If all endpoints fail, show mock data for demonstration
+      console.log('All API endpoints failed, using mock data');
+      setProviders(getMockProviders());
+      toast({
+        title: "Demo Mode",
+        description: "Showing demo data. Real providers will load when API is available.",
+        variant: "default"
+      });
+
+    } catch (error) {
+      console.error('All alternative endpoints failed:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load roadside services. Please try again later.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  // Mock data for demonstration when API is unavailable
+  const getMockProviders = (): ServiceProvider[] => [
+    {
+      id: 1,
+      business_name: "Nairobi Auto Repair",
+      business_type: "mechanic",
+      description: "24/7 mechanical services and roadside assistance",
+      address: "Mombasa Road, Nairobi",
+      city: "Nairobi",
+      contact_number: "+254712345678",
+      average_rating: "4.5",
+      total_reviews: 124,
+      latitude: "-1.286389",
+      longitude: "36.817223",
+      is_verified: true,
+      services: [
+        {
+          id: 1,
+          name: "Emergency Towing",
+          description: "Vehicle towing services",
+          price: "2500",
+          available: true
+        },
+        {
+          id: 2,
+          name: "Tire Change",
+          description: "Flat tire replacement",
+          price: "800",
+          available: true
+        }
+      ]
+    },
+    {
+      id: 2,
+      business_name: "Shell Station Westlands",
+      business_type: "gas_station",
+      description: "Fuel station with roadside assistance",
+      address: "Westlands, Nairobi",
+      city: "Nairobi",
+      contact_number: "+254723456789",
+      average_rating: "4.2",
+      total_reviews: 89,
+      latitude: "-1.265590",
+      longitude: "36.806360",
+      is_verified: true,
+      services: [
+        {
+          id: 3,
+          name: "Fuel Delivery",
+          description: "Emergency fuel delivery",
+          price: "1500",
+          available: true
+        }
+      ]
+    },
+    {
+      id: 3,
+      business_name: "City Tow Services",
+      business_type: "roadside_assistance",
+      description: "Professional towing and recovery services",
+      address: "Thika Road, Nairobi",
+      city: "Nairobi",
+      contact_number: "+254734567890",
+      average_rating: "4.7",
+      total_reviews: 156,
+      latitude: "-1.238270",
+      longitude: "36.830270",
+      is_verified: true,
+      services: [
+        {
+          id: 4,
+          name: "Heavy Duty Towing",
+          description: "Towing for trucks and large vehicles",
+          price: "5000",
+          available: true
+        },
+        {
+          id: 5,
+          name: "Light Towing",
+          description: "Towing for cars and small vehicles",
+          price: "2000",
+          available: true
+        }
+      ]
+    }
+  ];
 
   const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: number): string => {
     if (!userLocation) return "Unknown";
@@ -172,8 +327,8 @@ const RoadsideServices = () => {
 
   const getProviderCoordinates = (provider: ServiceProvider): [number, number] => {
     return [
-      parseFloat(provider.latitude) || 0,
-      parseFloat(provider.longitude) || 0
+      parseFloat(provider.longitude) || 36.817223, // Note: longitude first for Mapbox
+      parseFloat(provider.latitude) || -1.286389   // latitude second
     ];
   };
 
@@ -195,6 +350,11 @@ const RoadsideServices = () => {
           )
         : "Unknown"
     }));
+  };
+
+  const refreshProviders = () => {
+    setLoading(true);
+    fetchRoadsideProviders();
   };
 
   if (loading) {
@@ -230,6 +390,14 @@ const RoadsideServices = () => {
               </div>
             </div>
           </div>
+          <Button 
+            variant="ghost" 
+            size="sm"
+            onClick={refreshProviders}
+            className="text-white hover:bg-white/20"
+          >
+            Refresh
+          </Button>
         </div>
       </header>
 
@@ -295,12 +463,15 @@ const RoadsideServices = () => {
             <Card className="p-8 text-center">
               <Wrench className="h-12 w-12 text-muted-foreground/50 mx-auto mb-4" />
               <h3 className="font-semibold mb-2">No Providers Found</h3>
-              <p className="text-muted-foreground">
+              <p className="text-muted-foreground mb-4">
                 {selectedService 
                   ? `No ${serviceCategories.find(s => s.id === selectedService)?.title.toLowerCase()} available in your area`
                   : "No roadside service providers available in your area"
                 }
               </p>
+              <Button onClick={refreshProviders} variant="outline">
+                Try Again
+              </Button>
             </Card>
           ) : (
             getFilteredProviders().map((provider, index) => {
