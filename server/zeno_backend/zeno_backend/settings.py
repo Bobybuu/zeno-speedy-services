@@ -172,7 +172,7 @@ MAPBOX_STYLE_URL = os.getenv('MAPBOX_STYLE_URL', 'mapbox://styles/chrispin2005/c
 # OTP Settings
 OTP_EXPIRY_MINUTES = 10
 
-DEBUG = True
+DEBUG = False
 
 # Add these security settings
 if not DEBUG:
@@ -181,5 +181,10 @@ if not DEBUG:
     CSRF_COOKIE_SECURE = True
     SECURE_BROWSER_XSS_FILTER = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_HSTS_SECONDS = 31536000  # 1 year
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
     
 CORS_ALLOW_ALL_ORIGINS = False
+
