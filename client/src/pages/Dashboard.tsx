@@ -8,7 +8,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import ServiceCard from "@/components/ServiceCard";
 import BottomNav from "@/components/BottomNav";
 import { motion } from "framer-motion";
-import { safeGasProductsAPI, vendorsAPI } from "@/services/api"; // ✅ Use safeGasProductsAPI
+import { safeGasProductsAPI, vendorsAPI } from "@/services/api";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 
@@ -125,7 +125,7 @@ const Dashboard = () => {
 
         // Use Promise.allSettled to handle individual API failures gracefully
         const [gasResponse, vendorsResponse] = await Promise.allSettled([
-          safeGasProductsAPI.getGasProducts(gasFilters), // ✅ Use the safe API
+          safeGasProductsAPI.getGasProducts(gasFilters),
           vendorsAPI.getVendors({ 
             business_type: 'gas_station',
             is_verified: true,
@@ -397,9 +397,6 @@ const Dashboard = () => {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="text-white hover:bg-white/20">
-              <Bell className="h-5 w-5" />
-            </Button>
             <Avatar className="h-8 w-8 cursor-pointer" onClick={() => navigate("/account")}>
               <AvatarFallback className="bg-secondary text-white">
                 {getUserInitials()}
