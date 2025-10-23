@@ -17,7 +17,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
                  'user_type', 'phone_number', 'location', 'first_name', 'last_name')
         extra_kwargs = {
             'phone_number': {'required': True},
-            'username': {'required': True},
+            'username': {'required': False},
         }
 
     def validate(self, attrs):
@@ -33,6 +33,10 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         email = attrs.get('email')
         if email and User.objects.filter(email=email).exists():
             raise serializers.ValidationError({"email": "A user with this email already exists."})
+        
+        if not attrs.get('username') and phone_number:
+            attrs['username'] = phone_number  # Use phone number as username
+        
         
         return attrs
 
