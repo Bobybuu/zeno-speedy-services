@@ -1,4 +1,3 @@
-# users/views.py
 from rest_framework import status, permissions
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
@@ -28,14 +27,32 @@ from .serializers import (
     ResendOTPSerializer
 )
 from .otp_service import get_otp_service
+from .rate_limiter import otp_rate_limiter
 
 class RegisterView(APIView):
     permission_classes = [permissions.AllowAny]
     
     def post(self, request):
+        # Check rate limit before processing registration
+        phone_number = request.data.get('phone_number')
+        if phone_number:
+            is_limited, retry_after = otp_rate_limiter.is_rate_limited(phone_number)
+            if is_limited:
+                return Response({
+                    'error': f'Too many OTP requests. Please try again in {retry_after} seconds.',
+                    'retry_after': retry_after,
+                    'remaining_attempts': 0
+                }, status=status.HTTP_429_TOO_MANY_REQUESTS)
+        
         serializer = UserRegistrationSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.save()
+            
+            # Record OTP request for rate limiting
+            if user.phone_number:
+                otp_rate_limiter.record_request(user.phone_number)
+                remaining_attempts = otp_rate_limiter.get_remaining_attempts(user.phone_number)
+            
             refresh = RefreshToken.for_user(user)
             
             return Response({
@@ -43,12 +60,12 @@ class RegisterView(APIView):
                 'refresh': str(refresh),
                 'access': str(refresh.access_token),
                 'message': 'User registered successfully. Please verify your phone number with the OTP sent.',
-                'requires_otp_verification': bool(user.phone_number)
+                'requires_otp_verification': bool(user.phone_number),
+                'remaining_otp_attempts': remaining_attempts if user.phone_number else None
             }, status=status.HTTP_201_CREATED)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-# users/views.py - Update these views
 class LoginView(APIView):
     permission_classes = [permissions.AllowAny]
     
@@ -92,13 +109,28 @@ class ResendOTPView(APIView):
         serializer = ResendOTPSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.validated_data['user']
+            
+            # Check rate limit
+            is_limited, retry_after = otp_rate_limiter.is_rate_limited(user.phone_number)
+            if is_limited:
+                return Response({
+                    'error': f'Too many OTP requests. Please try again in {retry_after} seconds.',
+                    'retry_after': retry_after,
+                    'remaining_attempts': 0
+                }, status=status.HTTP_429_TOO_MANY_REQUESTS)
+            
             otp = user.generate_otp()
             otp_service = get_otp_service()
             success = otp_service.send_otp(user.phone_number, otp)
             
             if success:
+                # Record OTP request
+                otp_rate_limiter.record_request(user.phone_number)
+                remaining_attempts = otp_rate_limiter.get_remaining_attempts(user.phone_number)
+                
                 return Response({
-                    'message': 'OTP sent successfully to your phone number'
+                    'message': 'OTP sent successfully to your phone number',
+                    'remaining_attempts': remaining_attempts
                 })
             else:
                 return Response({
@@ -107,7 +139,6 @@ class ResendOTPView(APIView):
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-# Update Forgot Password views to use phone number
 class ForgotPasswordView(APIView):
     permission_classes = [permissions.AllowAny]
     
@@ -115,6 +146,15 @@ class ForgotPasswordView(APIView):
         serializer = ForgotPasswordSerializer(data=request.data)
         if serializer.is_valid():
             phone_number = serializer.validated_data['phone_number']
+            
+            # Check rate limit
+            is_limited, retry_after = otp_rate_limiter.is_rate_limited(phone_number)
+            if is_limited:
+                return Response({
+                    'error': f'Too many OTP requests. Please try again in {retry_after} seconds.',
+                    'retry_after': retry_after,
+                    'remaining_attempts': 0
+                }, status=status.HTTP_429_TOO_MANY_REQUESTS)
             
             try:
                 user = User.objects.get(phone_number=phone_number)
@@ -130,9 +170,14 @@ class ForgotPasswordView(APIView):
                 success = otp_service.send_otp(user.phone_number, reset_token)
                 
                 if success:
+                    # Record OTP request
+                    otp_rate_limiter.record_request(user.phone_number)
+                    remaining_attempts = otp_rate_limiter.get_remaining_attempts(user.phone_number)
+                    
                     return Response({
                         'message': 'Password reset code sent to your phone',
-                        'phone_number': phone_number
+                        'phone_number': phone_number,
+                        'remaining_attempts': remaining_attempts
                     })
                 else:
                     return Response({
@@ -141,6 +186,9 @@ class ForgotPasswordView(APIView):
                 
             except User.DoesNotExist:
                 # Don't reveal if phone number exists or not for security
+                # But still apply rate limiting to prevent phone number enumeration
+                otp_rate_limiter.record_request(phone_number)
+                
                 return Response({
                     'message': 'If the phone number exists, a reset code has been sent'
                 })
@@ -188,22 +236,7 @@ class LogoutView(APIView):
             return Response({'message': 'Successfully logged out'}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({'error': 'Invalid token'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        
-class UserListView(generics.ListAPIView):
-    queryset = User.objects.all()
-    serializer_class = UserProfileSerializer
-    permission_classes = [permissions.IsAdminUser]
 
-class UserDetailView(generics.RetrieveAPIView):
-    queryset = User.objects.all()
-    serializer_class = UserProfileSerializer
-    permission_classes = [permissions.IsAdminUser]
-    lookup_field = 'id'
-    
-    
-    
-    
 class UserListView(generics.ListCreateAPIView):
     """
     Admin or superuser view to list all users or create a new user.
@@ -224,7 +257,6 @@ class UserListView(generics.ListCreateAPIView):
                 status=status.HTTP_201_CREATED
             )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
 
 class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
     """
@@ -254,9 +286,6 @@ class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
         user = self.get_object()
         user.delete()
         return Response({"message": "User deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
-    
-    
-
 
 class ChangePasswordView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -291,9 +320,8 @@ class UpdateProfileView(APIView):
                 'message': 'Profile updated successfully'
             })
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
-    
-class ForgotPasswordView(APIView):
+
+class EmailForgotPasswordView(APIView):
     permission_classes = [permissions.AllowAny]
     
     def post(self, request):
@@ -406,7 +434,7 @@ class ResetPasswordView(APIView):
         except Exception as e:
             return Response({'error': 'Invalid or expired reset token'}, 
                           status=status.HTTP_400_BAD_REQUEST)
-    
+
 @csrf_exempt
 def health_check(request):
     return JsonResponse({
@@ -414,4 +442,3 @@ def health_check(request):
         "service": "Zeno Speedy Services API",
         "timestamp": timezone.now().isoformat()
     })
-    

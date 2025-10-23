@@ -4,6 +4,8 @@ from django.contrib.auth import authenticate
 from django.utils import timezone
 from .models import User
 from .otp_service import get_otp_service
+import phonenumbers
+from phonenumbers import NumberParseException
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=6)
@@ -59,6 +61,21 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             otp_service.send_otp(user.phone_number, otp)
         
         return user
+    def validate_phone_number(self, value):
+        """Validate phone number format"""
+        try:
+            # Parse phone number
+            parsed = phonenumbers.parse(value, None)
+            if not phonenumbers.is_valid_number(parsed):
+                raise serializers.ValidationError("Invalid phone number format.")
+            
+            # Format to E.164
+            formatted = phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164)
+            return formatted
+        except NumberParseException:
+            raise serializers.ValidationError("Invalid phone number format.")
+        
+        return value
 
 class UserLoginSerializer(serializers.Serializer):
     phone_number = serializers.CharField()
