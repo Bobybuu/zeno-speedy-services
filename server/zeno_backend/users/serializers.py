@@ -68,8 +68,8 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
     def validate_phone_number(self, value):
         """Validate phone number format"""
         try:
-            # Parse phone number
-            parsed = phonenumbers.parse(value, None)
+            # Parse phone number - use "KE" as default region for Kenya
+            parsed = phonenumbers.parse(value, "KE")
             if not phonenumbers.is_valid_number(parsed):
                 raise serializers.ValidationError("Invalid phone number format.")
             
@@ -79,7 +79,6 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         except NumberParseException:
             raise serializers.ValidationError("Invalid phone number format.")
         
-        return value
 
 class UserLoginSerializer(serializers.Serializer):
     phone_number = serializers.CharField()
