@@ -107,8 +107,14 @@ export interface VerifyOTPData {
   otp: string;
 }
 
+export interface UpdateOTPChannelData {
+  preferred_otp_channel: string;
+}
+
+
 export interface ResendOTPData {
   phone_number: string;
+  preferred_channel?: string;
 }
 
 export interface ChangePasswordData {
@@ -367,9 +373,10 @@ export const authAPI = {
   updateProfile: (data: UpdateProfileData) => api.put('/auth/update-profile/', data),
   changePassword: (data: ChangePasswordData) => api.post('/auth/change-password/', data),
   refreshToken: (refresh: string) => api.post('/auth/token/refresh/', { refresh }),
-  forgotPassword: (phone_number: string) => api.post('/auth/forgot-password/', { phone_number }),
+  forgotPassword: (data: ForgotPasswordData) => api.post('/auth/forgot-password/', data),
   verifyResetCode: (data: VerifyResetCodeData) => api.post('/auth/verify-reset-code/', data),
   resetPassword: (data: ResetPasswordData) => api.post('/auth/reset-password/', data),
+  updateOTPChannel: (data: UpdateOTPChannelData) => api.post('/auth/update-otp-channel/', data),
 };
 
 // Services API

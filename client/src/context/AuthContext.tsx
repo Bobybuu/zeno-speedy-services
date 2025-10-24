@@ -15,6 +15,23 @@ interface User {
   is_verified: boolean;
   phone_verified: boolean;
   date_joined: string;
+  preferred_otp_channel: string;
+  preferred_otp_channel_display?: string;
+}
+
+interface RegisterResult {
+  success: boolean;
+  requiresOTP?: boolean;
+  data?: any;
+  error?: any;
+  preferredChannelUsed?: string;
+}
+
+interface ResendOTPResult {
+  success: boolean;
+  data?: any;
+  error?: any;
+  channelUsed?: string;
 }
 
 interface AuthContextType {
@@ -23,12 +40,13 @@ interface AuthContextType {
   loading: boolean;
   pendingUser: User | null;
   login: (phone_number: string, password: string) => Promise<{ success: boolean; data?: any; error?: any }>;
-  register: (userData: any) => Promise<{ success: boolean; requiresOTP?: boolean; data?: any; error?: any }>;
+  register: (userData: any) => Promise<RegisterResult>;
   verifyOTP: (phone_number: string, otp: string) => Promise<{ success: boolean; data?: any; error?: any }>;
-  resendOTP: (phone_number: string) => Promise<{ success: boolean; data?: any; error?: any }>;
+  resendOTP: (phone_number: string, preferred_channel?: string) => Promise<ResendOTPResult>;
   logout: () => Promise<void>;
   checkAuthentication: () => Promise<void>;
   updateUser: (userData: Partial<User>) => void;
+  updateOTPChannel: (preferred_channel: string) => Promise<{ success: boolean; data?: any; error?: any }>;
 }
 
 interface AuthProviderProps {
@@ -51,7 +69,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [requiresOTP, setRequiresOTP] = useState(false);
   const [pendingUser, setPendingUser] = useState<User | null>(null);
-  
 
   // Check if user is logged in on app start
   useEffect(() => {
@@ -114,11 +131,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const register = async (userData: any) => {
+  const register = async (userData: any): Promise<RegisterResult> => {
     try {
       const response = await authAPI.register(userData);
       if (response.data) {
-        const { user, access, refresh, requires_otp_verification } = response.data;
+        const { user, access, refresh, requires_otp_verification, preferred_channel_used } = response.data;
         
         if (requires_otp_verification) {
           setPendingUser(user);
@@ -138,7 +155,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         return { 
           success: true, 
           requiresOTP: requires_otp_verification,
-          data: response.data 
+          data: response.data,
+          preferredChannelUsed: preferred_channel_used
         };
       }
       return { success: false, error: { message: 'No response data' } };
@@ -181,15 +199,48 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const resendOTP = async (phone_number: string) => {
+  const resendOTP = async (phone_number: string, preferred_channel?: string): Promise<ResendOTPResult> => {
     try {
-      const response = await authAPI.resendOTP({ phone_number });
-      return { success: true, data: response.data };
+      const data: any = { phone_number };
+      if (preferred_channel) {
+        data.preferred_channel = preferred_channel;
+      }
+      
+      const response = await authAPI.resendOTP(data);
+      return { 
+        success: true, 
+        data: response.data,
+        channelUsed: response.data.channel_used 
+      };
     } catch (error: any) {
       console.error('Resend OTP error:', error);
       return { 
         success: false, 
         error: error.response?.data || { message: 'Failed to resend OTP' } 
+      };
+    }
+  };
+
+  const updateOTPChannel = async (preferred_channel: string) => {
+    try {
+      const response = await authAPI.updateOTPChannel({ preferred_otp_channel: preferred_channel });
+      if (response.data) {
+        // Update current user in state and localStorage
+        const updatedUser = { ...currentUser, ...response.data };
+        setCurrentUser(updatedUser as User);
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+        
+        return { 
+          success: true, 
+          data: response.data 
+        };
+      }
+      return { success: false, error: { message: 'No response data' } };
+    } catch (error: any) {
+      console.error('Update OTP channel error:', error);
+      return { 
+        success: false, 
+        error: error.response?.data || { message: 'Failed to update OTP channel' } 
       };
     }
   };
@@ -232,6 +283,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     logout,
     checkAuthentication,
     updateUser,
+    updateOTPChannel,
     loading,
   };
 

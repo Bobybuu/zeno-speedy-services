@@ -1,10 +1,11 @@
+// src/pages/Register.tsx
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Phone, Lock, User, ChevronRight, Shield } from "lucide-react";
+import { Phone, Lock, User, ChevronRight, Shield, MessageCircle, PhoneCall, MessageSquare } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
@@ -19,12 +20,19 @@ const Register = () => {
     phoneNumber: "",
     password: "",
     confirmPassword: "",
-    userType: "customer"
+    userType: "customer",
+    preferred_otp_channel: "whatsapp"
   });
 
   const [otp, setOtp] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [otpResent, setOtpResent] = useState(false);
+  const [selectedOTPChannel, setSelectedOTPChannel] = useState("whatsapp");
+
+  const OTP_CHANNELS = [
+    { value: "voice", label: "Voice Call", icon: PhoneCall, description: "Get OTP via voice call" },
+    { value: "sms", label: "SMS", icon: MessageCircle, description: "Get OTP via text message" },
+  ];
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,29 +58,30 @@ const Register = () => {
 
     try {
       const registrationData = {
-        // Email is now optional - using phone number as primary identifier
-        email: "", // Optional field
-        username: formData.phoneNumber, // Use phone number as username
+        email: "",
+        username: formData.phoneNumber,
         password: formData.password,
         password_confirm: formData.confirmPassword,
         user_type: formData.userType,
         phone_number: formData.phoneNumber,
         location: "",
         first_name: formData.firstName,
-        last_name: formData.lastName
+        last_name: formData.lastName,
+        preferred_otp_channel: formData.preferred_otp_channel
       };
 
       const result = await register(registrationData);
       
       if (result.success) {
         if (result.requiresOTP) {
-          toast.success("Registration successful! Please verify your phone number.");
+          const channelUsed = result.preferredChannelUsed || formData.preferred_otp_channel;
+          const channelName = OTP_CHANNELS.find(c => c.value === channelUsed)?.label || channelUsed;
+          toast.success(`Registration successful! OTP sent via ${channelName}. Please verify your phone number.`);
         } else {
           toast.success("Registration successful!");
           navigate("/dashboard");
         }
       } else {
-        // Handle specific error cases
         if (result.error?.phone_number) {
           toast.error(result.error.phone_number[0]);
         } else if (result.error?.username) {
@@ -114,16 +123,21 @@ const Register = () => {
     }
   };
 
-  const handleResendOTP = async () => {
+  const handleResendOTP = async (preferredChannel?: string) => {
     setIsLoading(true);
     
     try {
-      const result = await resendOTP(pendingUser?.phone_number || formData.phoneNumber);
+      const result = await resendOTP(
+        pendingUser?.phone_number || formData.phoneNumber, 
+        preferredChannel || selectedOTPChannel
+      );
       
       if (result.success) {
-        toast.success("OTP sent successfully!");
+        const channelUsed = result.channelUsed || preferredChannel || selectedOTPChannel;
+        const channelName = OTP_CHANNELS.find(c => c.value === channelUsed)?.label || channelUsed;
+        toast.success(`OTP sent via ${channelName}!`);
         setOtpResent(true);
-        setTimeout(() => setOtpResent(false), 30000); // Disable resend for 30 seconds
+        setTimeout(() => setOtpResent(false), 30000);
       } else {
         toast.error(result.error?.message || "Failed to resend OTP");
       }
@@ -139,6 +153,10 @@ const Register = () => {
       ...formData,
       [e.target.name]: e.target.value,
     });
+  };
+
+  const getChannelDisplayName = (channel: string) => {
+    return OTP_CHANNELS.find(c => c.value === channel)?.label || channel;
   };
 
   // OTP Verification Form
@@ -194,16 +212,40 @@ const Register = () => {
                   <ChevronRight className="ml-2 h-4 w-4" />
                 </Button>
 
-                <div className="text-center">
-                  <Button
-                    type="button"
-                    variant="link"
-                    onClick={handleResendOTP}
-                    disabled={isLoading || otpResent}
-                    className="text-secondary"
-                  >
-                    {otpResent ? "OTP Sent! Wait 30s" : "Resend OTP"}
-                  </Button>
+                {/* OTP Channel Selection for Resend */}
+                <div className="space-y-3 pt-4 border-t">
+                  <Label className="text-sm font-medium">Resend via:</Label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {OTP_CHANNELS.map((channel) => (
+                      <Button
+                        key={channel.value}
+                        type="button"
+                        variant={selectedOTPChannel === channel.value ? "default" : "outline"}
+                        onClick={() => {
+                          setSelectedOTPChannel(channel.value);
+                          handleResendOTP(channel.value);
+                        }}
+                        disabled={isLoading || otpResent}
+                        className="flex flex-col items-center h-auto py-2 px-1 text-xs"
+                        size="sm"
+                      >
+                        <channel.icon className="h-4 w-4 mb-1" />
+                        <span>{channel.label}</span>
+                      </Button>
+                    ))}
+                  </div>
+                  
+                  <div className="text-center">
+                    <Button
+                      type="button"
+                      variant="link"
+                      onClick={() => handleResendOTP()}
+                      disabled={isLoading || otpResent}
+                      className="text-secondary text-xs"
+                    >
+                      {otpResent ? `Resend available in 30s` : "Resend with current method"}
+                    </Button>
+                  </div>
                 </div>
               </form>
             </CardContent>
@@ -312,6 +354,44 @@ const Register = () => {
                 </select>
               </div>
 
+              {/* OTP Channel Selection */}
+              <div className="space-y-3">
+                <Label className="text-sm font-medium">Preferred OTP Method</Label>
+                <div className="grid grid-cols-1 gap-2">
+                  {OTP_CHANNELS.map((channel) => (
+                    <div
+                      key={channel.value}
+                      onClick={() => setFormData(prev => ({ ...prev, preferred_otp_channel: channel.value }))}
+                      className={`p-3 border rounded-lg cursor-pointer transition-all ${
+                        formData.preferred_otp_channel === channel.value
+                          ? 'border-secondary bg-secondary/10 ring-2 ring-secondary/20'
+                          : 'border-gray-300 bg-white hover:bg-gray-50'
+                      }`}
+                    >
+                      <div className="flex items-center space-x-3">
+                        <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${
+                          formData.preferred_otp_channel === channel.value
+                            ? 'border-secondary bg-secondary'
+                            : 'border-gray-400'
+                        }`}>
+                          {formData.preferred_otp_channel === channel.value && (
+                            <div className="w-2 h-2 rounded-full bg-white"></div>
+                          )}
+                        </div>
+                        <div className="flex items-center space-x-2 flex-1">
+                          <channel.icon className="h-4 w-4 text-gray-600" />
+                          <span className="font-medium text-gray-900 text-sm">{channel.label}</span>
+                        </div>
+                      </div>
+                      <p className="text-xs text-gray-600 mt-1 ml-8">{channel.description}</p>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  This will be your preferred method for receiving verification codes.
+                </p>
+              </div>
+
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
                 <div className="relative">
@@ -359,14 +439,7 @@ const Register = () => {
               </Button>
             </form>
 
-            {/* Phone Registration Info */}
-            <div className="mt-6 p-4 bg-muted/30 rounded-lg border">
-              <h4 className="text-sm font-semibold mb-2 text-center">Phone Registration</h4>
-              <div className="text-xs text-muted-foreground space-y-1">
-                <p>• Your phone number is your login ID</p>
-                <p>• OTP will be sent for verification</p>
-              </div>
-            </div>
+            
           </CardContent>
           <div className="px-6 pb-6">
             <div className="text-center text-sm w-full">
