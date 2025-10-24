@@ -1,3 +1,4 @@
+# users/views.py
 from rest_framework import status, permissions
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
@@ -24,7 +25,10 @@ from .serializers import (
     UserUpdateSerializer,
     VerifyOTPSerializer,
     ForgotPasswordSerializer,
-    ResendOTPSerializer
+    ResendOTPSerializer,
+    VerifyResetCodeSerializer,
+    ResetPasswordSerializer,
+    ChangePasswordSerializer
 )
 from .otp_service import get_otp_service
 from .rate_limiter import otp_rate_limiter
@@ -61,7 +65,8 @@ class RegisterView(APIView):
                 'access': str(refresh.access_token),
                 'message': 'User registered successfully. Please verify your phone number with the OTP sent.',
                 'requires_otp_verification': bool(user.phone_number),
-                'remaining_otp_attempts': remaining_attempts if user.phone_number else None
+                'remaining_otp_attempts': remaining_attempts if user.phone_number else None,
+                'preferred_channel_used': user.preferred_otp_channel
             }, status=status.HTTP_201_CREATED)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -109,6 +114,11 @@ class ResendOTPView(APIView):
         serializer = ResendOTPSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.validated_data['user']
+            preferred_channel = request.data.get('preferred_channel')
+            
+            # Use user's preferred channel if not overridden
+            if not preferred_channel:
+                preferred_channel = user.preferred_otp_channel
             
             # Check rate limit
             is_limited, retry_after = otp_rate_limiter.is_rate_limited(user.phone_number)
@@ -121,20 +131,23 @@ class ResendOTPView(APIView):
             
             otp = user.generate_otp()
             otp_service = get_otp_service()
-            success = otp_service.send_otp(user.phone_number, otp)
+            result = otp_service.send_otp(user.phone_number, otp, preferred_channel)
             
-            if success:
+            if result['success']:
                 # Record OTP request
                 otp_rate_limiter.record_request(user.phone_number)
                 remaining_attempts = otp_rate_limiter.get_remaining_attempts(user.phone_number)
                 
                 return Response({
-                    'message': 'OTP sent successfully to your phone number',
+                    'message': f'OTP sent successfully via {result["channel_used"]}',
+                    'channel_used': result['channel_used'],
+                    'preferred_channel': preferred_channel,
                     'remaining_attempts': remaining_attempts
                 })
             else:
                 return Response({
-                    'error': 'Failed to send OTP. Please try again.'
+                    'error': 'Failed to send OTP via all channels. Please try again later.',
+                    'channels_attempted': result['channels_attempted']
                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -146,6 +159,7 @@ class ForgotPasswordView(APIView):
         serializer = ForgotPasswordSerializer(data=request.data)
         if serializer.is_valid():
             phone_number = serializer.validated_data['phone_number']
+            preferred_channel = request.data.get('preferred_channel')
             
             # Check rate limit
             is_limited, retry_after = otp_rate_limiter.is_rate_limited(phone_number)
@@ -159,29 +173,36 @@ class ForgotPasswordView(APIView):
             try:
                 user = User.objects.get(phone_number=phone_number)
                 
+                # Use user's preferred channel if not overridden
+                if not preferred_channel:
+                    preferred_channel = user.preferred_otp_channel
+                
                 # Generate reset token
                 reset_token = ''.join(random.choices(string.digits, k=6))
                 user.otp = reset_token
                 user.otp_created_at = timezone.now()
                 user.save()
                 
-                # Send reset SMS
+                # Send reset OTP
                 otp_service = get_otp_service()
-                success = otp_service.send_otp(user.phone_number, reset_token)
+                result = otp_service.send_otp(user.phone_number, reset_token, preferred_channel)
                 
-                if success:
+                if result['success']:
                     # Record OTP request
                     otp_rate_limiter.record_request(user.phone_number)
                     remaining_attempts = otp_rate_limiter.get_remaining_attempts(user.phone_number)
                     
                     return Response({
-                        'message': 'Password reset code sent to your phone',
+                        'message': f'Password reset code sent via {result["channel_used"]}',
                         'phone_number': phone_number,
+                        'channel_used': result['channel_used'],
+                        'preferred_channel': preferred_channel,
                         'remaining_attempts': remaining_attempts
                     })
                 else:
                     return Response({
-                        'error': 'Failed to send reset code. Please try again.'
+                        'error': 'Failed to send reset code via all channels. Please try again later.',
+                        'channels_attempted': result['channels_attempted']
                     }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
                 
             except User.DoesNotExist:
@@ -205,9 +226,17 @@ class UserProfileView(APIView):
     def put(self, request):
         serializer = UserUpdateSerializer(request.user, data=request.data, partial=True)
         if serializer.is_valid():
-            serializer.save()
+            user = serializer.save()
+            
+            # If OTP channel was updated, send confirmation
+            if 'preferred_otp_channel' in request.data:
+                return Response({
+                    'user': UserProfileSerializer(user).data,
+                    'message': f'Profile updated successfully. Your preferred OTP channel is now {user.get_preferred_otp_channel_display()}.'
+                })
+            
             return Response({
-                'user': UserProfileSerializer(request.user).data,
+                'user': UserProfileSerializer(user).data,
                 'message': 'Profile updated successfully'
             })
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -246,7 +275,7 @@ class UserListView(generics.ListCreateAPIView):
     permission_classes = [IsAdminOrSuperUser]
 
     def post(self, request, *args, **kwargs):
-        serializer = UserUpdateSerializer(data=request.data)
+        serializer = UserRegistrationSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.save()
             return Response(
@@ -291,19 +320,31 @@ class ChangePasswordView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def post(self, request):
-        user = request.user
-        form = PasswordChangeForm(user, request.data)
-        
-        if form.is_valid():
-            user = form.save()
+        serializer = ChangePasswordSerializer(data=request.data)
+        if serializer.is_valid():
+            user = request.user
+            old_password = serializer.validated_data['old_password']
+            new_password = serializer.validated_data['new_password1']
+            
+            # Check old password
+            if not user.check_password(old_password):
+                return Response({
+                    'error': 'Current password is incorrect'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Set new password
+            user.set_password(new_password)
+            user.save()
+            
             # Update session auth hash to keep user logged in
             update_session_auth_hash(request, user)
+            
             return Response({
                 'message': 'Password changed successfully'
             }, status=status.HTTP_200_OK)
         else:
             return Response({
-                'errors': form.errors
+                'errors': serializer.errors
             }, status=status.HTTP_400_BAD_REQUEST)
 
 class UpdateProfileView(APIView):
@@ -344,7 +385,7 @@ class EmailForgotPasswordView(APIView):
                 print(f"Password reset token for {email}: {reset_token}")
             else:
                 send_mail(
-                    'Password Reset Request - Zeno Services',
+                    'Password Reset Request - Zeno Roadside Connect',
                     f'Your password reset code is: {reset_token}. This code expires in 10 minutes.',
                     settings.DEFAULT_FROM_EMAIL,
                     [email],
@@ -366,79 +407,97 @@ class VerifyResetCodeView(APIView):
     permission_classes = [permissions.AllowAny]
     
     def post(self, request):
-        email = request.data.get('email')
-        reset_code = request.data.get('reset_code')
-        
-        if not email or not reset_code:
-            return Response({'error': 'Email and reset code are required'}, 
-                          status=status.HTTP_400_BAD_REQUEST)
-        
-        try:
-            user = User.objects.get(email=email)
+        serializer = VerifyResetCodeSerializer(data=request.data)
+        if serializer.is_valid():
+            phone_number = serializer.validated_data['phone_number']
+            reset_code = serializer.validated_data['reset_code']
             
-            # Check if reset code is valid and not expired
-            if (user.otp == reset_code and 
-                user.otp_created_at and 
-                timezone.now() - user.otp_created_at < timedelta(minutes=10)):
+            try:
+                user = User.objects.get(phone_number=phone_number)
                 
-                # Generate a verification token for the reset session
-                from rest_framework_simplejwt.tokens import RefreshToken
-                refresh = RefreshToken.for_user(user)
-                reset_token = str(refresh.access_token)
-                
-                return Response({
-                    'message': 'Reset code verified successfully',
-                    'reset_token': reset_token
-                })
-            else:
-                return Response({'error': 'Invalid or expired reset code'}, 
+                # Check if reset code is valid and not expired
+                if (user.otp == reset_code and 
+                    user.otp_created_at and 
+                    timezone.now() - user.otp_created_at < timedelta(minutes=getattr(settings, 'OTP_EXPIRY_MINUTES', 10))):
+                    
+                    # Generate a verification token for the reset session
+                    refresh = RefreshToken.for_user(user)
+                    reset_token = str(refresh.access_token)
+                    
+                    return Response({
+                        'message': 'Reset code verified successfully',
+                        'reset_token': reset_token
+                    })
+                else:
+                    return Response({'error': 'Invalid or expired reset code'}, 
+                                  status=status.HTTP_400_BAD_REQUEST)
+                    
+            except User.DoesNotExist:
+                return Response({'error': 'Invalid reset code'}, 
                               status=status.HTTP_400_BAD_REQUEST)
-                
-        except User.DoesNotExist:
-            return Response({'error': 'Invalid reset code'}, 
-                          status=status.HTTP_400_BAD_REQUEST)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class ResetPasswordView(APIView):
     permission_classes = [permissions.AllowAny]
     
     def post(self, request):
-        reset_token = request.data.get('reset_token')
-        new_password = request.data.get('new_password')
-        confirm_password = request.data.get('confirm_password')
+        serializer = ResetPasswordSerializer(data=request.data)
+        if serializer.is_valid():
+            reset_token = serializer.validated_data['reset_token']
+            new_password = serializer.validated_data['new_password']
+            
+            # Verify the reset token
+            from rest_framework_simplejwt.tokens import AccessToken
+            try:
+                token = AccessToken(reset_token)
+                user_id = token['user_id']
+                user = User.objects.get(id=user_id)
+                
+                # Set new password
+                user.set_password(new_password)
+                user.otp = None  # Clear the reset code
+                user.otp_created_at = None
+                user.save()
+                
+                return Response({
+                    'message': 'Password reset successfully'
+                })
+                
+            except Exception as e:
+                return Response({'error': 'Invalid or expired reset token'}, 
+                              status=status.HTTP_400_BAD_REQUEST)
         
-        if not reset_token or not new_password:
-            return Response({'error': 'Reset token and new password are required'}, 
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class UpdateOTPChannelView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def post(self, request):
+        preferred_channel = request.data.get('preferred_otp_channel')
+        
+        if not preferred_channel:
+            return Response({'error': 'Preferred OTP channel is required'}, 
                           status=status.HTTP_400_BAD_REQUEST)
         
-        if new_password != confirm_password:
-            return Response({'error': 'Passwords do not match'}, 
+        if preferred_channel not in ['whatsapp', 'voice', 'sms']:
+            return Response({'error': 'Invalid OTP channel. Choose from: whatsapp, voice, sms'}, 
                           status=status.HTTP_400_BAD_REQUEST)
         
-        # Verify the reset token
-        from rest_framework_simplejwt.tokens import AccessToken
-        try:
-            token = AccessToken(reset_token)
-            user_id = token['user_id']
-            user = User.objects.get(id=user_id)
-            
-            # Set new password
-            user.set_password(new_password)
-            user.otp = None  # Clear the reset code
-            user.otp_created_at = None
-            user.save()
-            
-            return Response({
-                'message': 'Password reset successfully'
-            })
-            
-        except Exception as e:
-            return Response({'error': 'Invalid or expired reset token'}, 
-                          status=status.HTTP_400_BAD_REQUEST)
+        user = request.user
+        user.preferred_otp_channel = preferred_channel
+        user.save()
+        
+        return Response({
+            'message': f'Your preferred OTP channel has been updated to {user.get_preferred_otp_channel_display()}',
+            'preferred_otp_channel': user.preferred_otp_channel,
+            'preferred_otp_channel_display': user.get_preferred_otp_channel_display()
+        })
 
 @csrf_exempt
 def health_check(request):
     return JsonResponse({
         "status": "healthy", 
-        "service": "Zeno Speedy Services API",
+        "service": "Zeno Roadside Connect API",
         "timestamp": timezone.now().isoformat()
     })

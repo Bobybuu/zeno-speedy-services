@@ -13,6 +13,12 @@ class User(AbstractUser):
         ('admin', 'Admin'),
     )
     
+    OTP_CHOICES = [
+        ('whatsapp', 'WhatsApp'),
+        ('voice', 'Voice Call'),
+        ('sms', 'SMS'),
+    ]
+    
     user_type = models.CharField(max_length=20, choices=USER_TYPES, default='customer')
     phone_number = models.CharField(max_length=15, blank=True)
     location = models.CharField(max_length=255, blank=True)
@@ -21,6 +27,12 @@ class User(AbstractUser):
     phone_verified = models.BooleanField(default=False)
     otp = models.CharField(max_length=6, blank=True, null=True)
     otp_created_at = models.DateTimeField(null=True, blank=True)
+    preferred_otp_channel = models.CharField(
+        max_length=10,
+        choices=OTP_CHOICES,
+        default='whatsapp',
+        help_text="Preferred method for receiving OTP codes"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -43,13 +55,17 @@ class User(AbstractUser):
         
         if (self.otp == otp and 
             self.otp_created_at and 
-            timezone.now() - self.otp_created_at < timedelta(minutes=settings.OTP_EXPIRY_MINUTES)):
+            timezone.now() - self.otp_created_at < timedelta(minutes=getattr(settings, 'OTP_EXPIRY_MINUTES', 10))):
             self.phone_verified = True
             self.otp = None
             self.otp_created_at = None
             self.save()
             return True
         return False
+
+    def get_preferred_otp_channel_display(self):
+        """Get human-readable preferred OTP channel"""
+        return dict(self.OTP_CHOICES).get(self.preferred_otp_channel, 'WhatsApp')
 
     class Meta:
         db_table = 'users'

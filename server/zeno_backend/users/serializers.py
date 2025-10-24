@@ -10,11 +10,18 @@ from phonenumbers import NumberParseException
 class UserRegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=6)
     password_confirm = serializers.CharField(write_only=True, min_length=6)
+    preferred_otp_channel = serializers.ChoiceField(
+        choices=[('whatsapp', 'WhatsApp'), ('voice', 'Voice Call'), ('sms', 'SMS')],
+        required=False,
+        default='whatsapp',
+        help_text="Preferred OTP delivery method: whatsapp, voice, or sms"
+    )
 
     class Meta:
         model = User
         fields = ('id', 'email', 'username', 'password', 'password_confirm', 
-                 'user_type', 'phone_number', 'location', 'first_name', 'last_name')
+                 'user_type', 'phone_number', 'location', 'first_name', 'last_name',
+                 'preferred_otp_channel')
         extra_kwargs = {
             'phone_number': {'required': True},
             'username': {'required': False},
@@ -35,12 +42,13 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"email": "A user with this email already exists."})
         
         if not attrs.get('username') and phone_number:
-            attrs['username'] = phone_number  # Use phone number as username
-        
+            attrs['username'] = phone_number
         
         return attrs
 
     def create(self, validated_data):
+        # Extract preferred channel before creating user
+        preferred_channel = validated_data.pop('preferred_otp_channel', 'whatsapp')
         validated_data.pop('password_confirm')
         
         # Generate username from phone number if not provided
@@ -58,14 +66,17 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             last_name=validated_data.get('last_name', ''),
         )
         
-        # Generate and send OTP to phone number
+        # Store user's preferred OTP channel
+        user.preferred_otp_channel = preferred_channel
+        user.save()
+        
+        # Generate and send OTP using preferred channel
         if user.phone_number:
             otp = user.generate_otp()
             otp_service = get_otp_service()
-            otp_service.send_otp(user.phone_number, otp)
+            otp_service.send_otp(user.phone_number, otp, preferred_channel)
         
         return user
-    
 
 class UserLoginSerializer(serializers.Serializer):
     phone_number = serializers.CharField()
@@ -76,10 +87,8 @@ class UserLoginSerializer(serializers.Serializer):
         password = data.get('password')
         
         if phone_number and password:
-            # Find user by phone number
             try:
                 user = User.objects.get(phone_number=phone_number)
-                # Authenticate using username (which is the phone number in our case)
                 user = authenticate(username=user.username, password=password)
                 if user:
                     if user.is_active:
@@ -112,6 +121,11 @@ class VerifyOTPSerializer(serializers.Serializer):
 
 class ResendOTPSerializer(serializers.Serializer):
     phone_number = serializers.CharField()
+    preferred_channel = serializers.ChoiceField(
+        choices=[('whatsapp', 'WhatsApp'), ('voice', 'Voice Call'), ('sms', 'SMS')],
+        required=False,
+        help_text="Optional: Override user's preferred OTP channel for this resend"
+    )
 
     def validate(self, data):
         try:
@@ -123,17 +137,24 @@ class ResendOTPSerializer(serializers.Serializer):
         return data
 
 class UserProfileSerializer(serializers.ModelSerializer):
+    preferred_otp_channel = serializers.CharField(source='get_preferred_otp_channel_display', read_only=True)
+    
     class Meta:
         model = User
         fields = ('id', 'email', 'username', 'user_type', 'phone_number', 
                  'location', 'first_name', 'last_name', 'profile_picture', 
-                 'is_verified', 'phone_verified', 'date_joined')
-        read_only_fields = ('id', 'email', 'date_joined')
+                 'is_verified', 'phone_verified', 'date_joined', 'preferred_otp_channel')
+        read_only_fields = ('id', 'email', 'date_joined', 'preferred_otp_channel')
 
 class UserUpdateSerializer(serializers.ModelSerializer):
+    preferred_otp_channel = serializers.ChoiceField(
+        choices=[('whatsapp', 'WhatsApp'), ('voice', 'Voice Call'), ('sms', 'SMS')],
+        required=False
+    )
+
     class Meta:
         model = User
-        fields = ('username', 'first_name', 'last_name', 'phone_number', 'location', 'profile_picture')
+        fields = ('username', 'first_name', 'last_name', 'phone_number', 'location', 'profile_picture', 'preferred_otp_channel')
         read_only_fields = ('email', 'user_type', 'is_verified', 'phone_verified', 'date_joined')
 
 class ChangePasswordSerializer(serializers.Serializer):
@@ -148,6 +169,11 @@ class ChangePasswordSerializer(serializers.Serializer):
 
 class ForgotPasswordSerializer(serializers.Serializer):
     phone_number = serializers.CharField(required=True)
+    preferred_channel = serializers.ChoiceField(
+        choices=[('whatsapp', 'WhatsApp'), ('voice', 'Voice Call'), ('sms', 'SMS')],
+        required=False,
+        help_text="Preferred OTP delivery method for password reset"
+    )
 
 class VerifyResetCodeSerializer(serializers.Serializer):
     phone_number = serializers.CharField(required=True)
