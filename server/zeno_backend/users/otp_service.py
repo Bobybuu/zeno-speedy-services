@@ -12,39 +12,39 @@ class MultiChannelOTPService:
         self.auth_token = settings.TWILIO_AUTH_TOKEN
         self.phone_number = settings.TWILIO_PHONE_NUMBER
         self.client = Client(self.account_sid, self.auth_token)
-        self.whatsapp_from = 'whatsapp:+14155238886'  # Twilio WhatsApp sandbox
+        # WhatsApp disabled for now
+        # self.whatsapp_from = 'whatsapp:+14155238886'  # Twilio WhatsApp sandbox
     
     def send_otp(self, phone_number, otp, preferred_channel=None):
         """
         Send OTP via user's preferred channel with fallbacks
-        Channels: 'whatsapp', 'voice', 'sms'
+        FORCE VOICE for now due to SMS/WhatsApp restrictions
+        Channels: 'voice' only (WhatsApp disabled, SMS commented)
         """
-        # Define channel priority based on preference
-        if preferred_channel == 'whatsapp':
-            channel_order = ['whatsapp', 'voice', 'sms']
-        elif preferred_channel == 'voice':
-            channel_order = ['voice', 'whatsapp', 'sms']
-        elif preferred_channel == 'sms':
-            channel_order = ['sms', 'whatsapp', 'voice']
-        else:
-            # Default priority: WhatsApp → Voice → SMS
-            channel_order = ['whatsapp', 'voice', 'sms']
+        # FORCE VOICE for all requests - remove this after other channels are fixed
+        logger.info(f"FORCING VOICE OTP for {phone_number}. Original preference: {preferred_channel}")
+        preferred_channel = 'voice'
+        
+        # Only voice is enabled for now
+        channel_order = ['voice']
         
         channels_attempted = []
         
-        # Try each channel in order
+        # Try each channel in order (only voice for now)
         for channel in channel_order:
-            if channel == 'whatsapp':
-                result = self._send_whatsapp_otp(phone_number, otp)
-            elif channel == 'voice':
+            if channel == 'voice':
                 result = self._send_voice_otp(phone_number, otp)
-            else:  # sms
-                result = self._send_sms_otp(phone_number, otp)
+            # WhatsApp disabled
+            # elif channel == 'whatsapp':
+            #     result = self._send_whatsapp_otp(phone_number, otp)
+            # SMS commented out
+            # else:  # sms
+            #     result = self._send_sms_otp(phone_number, otp)
             
             channels_attempted.append((channel, result))
             
             if result['success']:
-                logger.info(f"OTP sent via {channel} to {phone_number} (preferred: {preferred_channel})")
+                logger.info(f"OTP sent via {channel} to {phone_number}")
                 return {
                     'success': True,
                     'channel_used': channel,
@@ -53,43 +53,27 @@ class MultiChannelOTPService:
                     'details': result
                 }
         
-        # All channels failed
-        logger.error(f"All OTP channels failed for {phone_number}. Preferred: {preferred_channel}")
+        # Voice channel failed
+        logger.error(f"Voice OTP failed for {phone_number}")
         return {
             'success': False,
             'channel_used': None,
             'preferred_channel': preferred_channel,
             'channels_attempted': channels_attempted,
-            'error': 'All delivery channels failed'
+            'error': 'Voice OTP delivery failed'
         }
     
     def _send_whatsapp_otp(self, phone_number, otp_code):
-        """Send OTP via WhatsApp"""
-        try:
-            whatsapp_to = f"whatsapp:{phone_number}"
-            
-            message = self.client.messages.create(
-                body=f"🔐 *Zeno Services Verification*\n\nYour verification code is: *{otp_code}*\n\nThis code expires in 10 minutes.\n\nDo not share this code with anyone.",
-                from_=self.whatsapp_from,
-                to=whatsapp_to
-            )
-            
-            return {
-                'success': True,
-                'message_sid': message.sid,
-                'status': message.status
-            }
-            
-        except Exception as e:
-            logger.warning(f"WhatsApp OTP failed for {phone_number}: {str(e)}")
-            return {
-                'success': False,
-                'error': str(e),
-                'error_code': getattr(e, 'code', 'Unknown')
-            }
+        """Send OTP via WhatsApp - DISABLED"""
+        logger.warning(f"WhatsApp OTP attempted but disabled for {phone_number}")
+        return {
+            'success': False,
+            'error': 'WhatsApp OTP is currently disabled',
+            'error_code': 'WHATSAPP_DISABLED'
+        }
     
     def _send_voice_otp(self, phone_number, otp_code):
-        """Send OTP via Voice Call"""
+        """Send OTP via Voice Call - PRIMARY CHANNEL"""
         try:
             otp_digits = '. '.join(list(otp_code))
             
@@ -116,6 +100,7 @@ class MultiChannelOTPService:
                 timeout=30
             )
             
+            logger.info(f"Voice OTP initiated for {phone_number}, Call SID: {call.sid}")
             return {
                 'success': True,
                 'call_sid': call.sid,
@@ -123,7 +108,7 @@ class MultiChannelOTPService:
             }
             
         except Exception as e:
-            logger.warning(f"Voice OTP failed for {phone_number}: {str(e)}")
+            logger.error(f"Voice OTP failed for {phone_number}: {str(e)}")
             return {
                 'success': False,
                 'error': str(e),
@@ -131,57 +116,27 @@ class MultiChannelOTPService:
             }
     
     def _send_sms_otp(self, phone_number, otp_code):
-        """Send OTP via SMS"""
-        try:
-            message = self.client.messages.create(
-                body=f'Zeno Roadside Connect verification code: {otp_code}. Expires in 10 minutes.',
-                from_='ZenoConnect',
-                to=phone_number
-            )
-            
-            return {
-                'success': True,
-                'message_sid': message.sid,
-                'status': message.status,
-                'sender_type': 'alphanumeric'
-            }
-            
-        except Exception as e:
-            logger.warning(f"SMS with alphanumeric failed, trying with phone number: {str(e)}")
-            try:
-                message = self.client.messages.create(
-                    body=f'Zeno Roadside Connect verification code: {otp_code}. Expires in 10 minutes.',
-                    from_=self.phone_number,
-                    to=phone_number
-                )
-                
-                return {
-                    'success': True,
-                    'message_sid': message.sid,
-                    'status': message.status,
-                    'sender_type': 'phone_number'
-                }
-                
-            except Exception as sms_fallback_error:
-                logger.error(f"SMS OTP completely failed for {phone_number}: {str(sms_fallback_error)}")
-                return {
-                    'success': False,
-                    'error': str(sms_fallback_error),
-                    'error_code': getattr(sms_fallback_error, 'code', 'Unknown')
-                }
+        """Send OTP via SMS - COMMENTED OUT due to Kenya restrictions"""
+        logger.warning(f"SMS OTP attempted but commented out for {phone_number}")
+        return {
+            'success': False,
+            'error': 'SMS OTP is currently disabled for Kenya',
+            'error_code': 'SMS_DISABLED'
+        }
 
 # Fallback OTP service for development
 class DevelopmentOTPService:
     def send_otp(self, phone_number, otp, preferred_channel=None):
         print(f"🔐 DEV OTP for {phone_number}: {otp}")
-        print(f"📱 Preferred channel: {preferred_channel}")
-        print("📞 Channels that would be attempted based on preference")
+        print(f"📱 Original preferred channel: {preferred_channel}")
+        print(f"🔊 FORCING VOICE OTP (other channels disabled)")
+        print("📞 Voice call would be initiated")
         return {
             'success': True,
-            'channel_used': preferred_channel or 'development',
-            'preferred_channel': preferred_channel,
-            'channels_attempted': [(preferred_channel or 'development', {'success': True})],
-            'details': {'simulated': True}
+            'channel_used': 'voice',
+            'preferred_channel': 'voice',
+            'channels_attempted': [('voice', {'success': True})],
+            'details': {'simulated': True, 'message': 'Voice OTP would be sent'}
         }
 
 # Use appropriate service based on environment
