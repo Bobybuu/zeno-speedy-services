@@ -63,8 +63,8 @@ class RegisterView(APIView):
                 'user': UserProfileSerializer(user).data,
                 'refresh': str(refresh),
                 'access': str(refresh.access_token),
-                'message': 'User registered successfully. Please verify your phone number with the OTP sent.',
-                'requires_otp_verification': bool(user.phone_number),
+                'message': 'User registered successfully!',
+                'requires_otp_verification': False,
                 'remaining_otp_attempts': remaining_attempts if user.phone_number else None,
                 'preferred_channel_used': user.preferred_otp_channel
             }, status=status.HTTP_201_CREATED)

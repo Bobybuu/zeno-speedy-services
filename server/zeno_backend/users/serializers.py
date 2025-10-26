@@ -71,11 +71,11 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         user.save()
         
         # Generate and send OTP using preferred channel
-        if user.phone_number:
-            otp = user.generate_otp()
-            otp_service = get_otp_service()
-            otp_service.send_otp(user.phone_number, otp, preferred_channel)
-        
+        #if user.phone_number:
+            #otp = user.generate_otp()
+            #otp_service = get_otp_service()
+            #otp_service.send_otp(user.phone_number, otp, preferred_channel)
+
         return user
 
 class UserLoginSerializer(serializers.Serializer):
