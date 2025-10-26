@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+// src/pages/GasProviderDetail.tsx - COMPLETE FIXED VERSION
+import { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { ArrowLeft, MapPin, Star, Phone, ShoppingCart, Loader2, Clock, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -8,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import GasProductCard from "@/components/GasProductCard";
 import BottomNav from "@/components/BottomNav";
 import { gasProductsAPI, vendorsAPI } from "@/services/api";
-import { useCart } from "@/context/CartContext"; // ✅ Add CartContext import
+import { useCart } from "@/context/CartContext";
 import { toast } from "sonner";
 
 // Updated interfaces to match your Django API
@@ -68,7 +69,21 @@ const GasProviderDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const { cartItemCount, cartTotal } = useCart(); // ✅ Use CartContext
+  const { cart } = useCart(); // ✅ Get cart instead of cartItemCount and cartTotal
+  
+  // ✅ COMPUTE VALUES FROM CART:
+  const cartItemCount = useMemo(() => {
+    if (!cart?.items) return 0;
+    return cart.items.reduce((total, item) => total + item.quantity, 0);
+  }, [cart?.items]);
+
+  const cartTotal = useMemo(() => {
+    if (!cart?.total_amount) return 0;
+    return typeof cart.total_amount === 'string' 
+      ? parseFloat(cart.total_amount) 
+      : cart.total_amount;
+  }, [cart?.total_amount]);
+
   const [vendor, setVendor] = useState<Vendor | null>(null);
   const [gasProducts, setGasProducts] = useState<GasProduct[]>([]);
   const [loading, setLoading] = useState(true);

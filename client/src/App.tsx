@@ -1,12 +1,22 @@
+// src/App.tsx
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
-import { CartProvider } from "./context/CartContext"; // ✅ Import CartProvider
+import { CartProvider } from "./context/CartContext";
 import { DebugCart } from '@/components/DebugCart';
 
+// Vendor Pages
+import VendorDashboard from '@/pages/vendor/VendorDashboard'
+import DashboardOverview from '@/pages/vendor/DashboardOverview'
+import VendorProducts from '@/pages/vendor/VendorProducts'
+import VendorOrders from '@/pages/vendor/VendorOrders'
+import VendorAnalytics from '@/pages/vendor/VendorAnalytics'
+import VendorSettings from '@/pages/vendor/VendorSettings'
+import AddProduct from '@/pages/vendor/AddProduct'
+import EditProduct from '@/pages/vendor/EditProduct'
 
 // Layout Components
 import MainLayout from "./layouts/MainLayout";
@@ -40,9 +50,6 @@ import Checkout from "./pages/Checkout";
 // User Management
 import Account from "./pages/Account";
 import EditProfile from "./pages/EditProfile";
-
-// Vendor Pages
-import VendorDashboard from "./pages/VendorDashboard";
 
 // PWA Components
 import { PWAInstallButton } from "@/components/PWAInstallButton";
@@ -118,6 +125,15 @@ const PublicRoute = ({ children }: { children: React.ReactNode }) => {
   }
 
   return <AuthLayout>{children}</AuthLayout>;
+};
+
+// Vendor Layout Component that accepts children
+const VendorLayout = ({ children }: { children: React.ReactNode }) => {
+  return (
+    <VendorDashboard>
+      {children}
+    </VendorDashboard>
+  );
 };
 
 const AppRoutes = () => {
@@ -224,7 +240,7 @@ const AppRoutes = () => {
             <Payment />
           </ProtectedRoute>
         } />
-       
+        
         {/* User Profile - Protected */}
         <Route path="/account" element={
           <ProtectedRoute>
@@ -242,10 +258,33 @@ const AppRoutes = () => {
           </ProtectedRoute>
         } />
 
-        {/* Vendor Dashboard - Protected for vendors only*/}
-        <Route path="/vendor/dashboard" element={
+        {/* Vendor Dashboard Routes - Protected for vendors only */}
+        <Route path="/vendor" element={
           <ProtectedRoute requiredUserType="vendor">
             <VendorDashboard />
+          </ProtectedRoute>
+        }>
+          <Route path="dashboard" element={<DashboardOverview />} />
+          <Route path="products" element={<VendorProducts />} />
+          <Route path="orders" element={<VendorOrders />} />
+          <Route path="analytics" element={<VendorAnalytics />} />
+          <Route path="settings" element={<VendorSettings />} />
+          <Route index element={<Navigate to="/vendor/dashboard" replace />} />
+        </Route>
+
+        {/* Vendor Product Management Routes - Protected for vendors only */}
+        <Route path="/vendor/products/new" element={
+          <ProtectedRoute requiredUserType="vendor">
+            <VendorLayout>
+              <AddProduct />
+            </VendorLayout>
+          </ProtectedRoute>
+        } />
+        <Route path="/vendor/products/edit/:productId" element={
+          <ProtectedRoute requiredUserType="vendor">
+            <VendorLayout>
+              <EditProduct />
+            </VendorLayout>
           </ProtectedRoute>
         } />
         
@@ -281,16 +320,18 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <BrowserRouter>
+      <Router>
         <AuthProvider>
           <CartProvider>
-            <DebugCart /> {/* ✅ Add CartProvider here */}
+            <DebugCart />
             <div className="min-h-screen bg-background">
-              <AppRoutes />
+              <ErrorBoundary>
+                <AppRoutes />
+              </ErrorBoundary>
             </div>
           </CartProvider>
         </AuthProvider>
-      </BrowserRouter>
+      </Router>
     </TooltipProvider>
   </QueryClientProvider>
 );

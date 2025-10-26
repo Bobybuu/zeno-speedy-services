@@ -1,4 +1,4 @@
-// src/pages/Cart.tsx - Updated version
+// src/pages/Cart.tsx
 import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Trash2, Plus, Minus, ShoppingBag, Loader2, MapPin, Phone, AlertTriangle } from "lucide-react";
@@ -164,23 +164,32 @@ const Cart = () => {
     };
   };
 
-  // ✅ FIXED: Filter only gas products for display with better detection
+  // ✅ IMPROVED: Robust gas product filtering with multiple detection methods
   const gasProductItems: CartItem[] = useMemo(() => {
     if (!cart?.items || !Array.isArray(cart.items)) {
       console.log('🔄 No cart items or items is not an array');
       return [];
     }
     
-    console.log('🔍 All cart items:', cart.items);
+    console.log('🔍 All cart items for filtering:', cart.items);
     
     const filteredItems = cart.items.filter((item: CartItem) => {
-      // Check multiple possible indicators of a gas product from backend
+      // ✅ ROBUST FIX: Multiple criteria to detect gas products
+      const hasGasProductField = item.gas_product !== undefined && item.gas_product !== null;
+      const hasProductId = item.product_id !== undefined && item.product_id !== null;
+      const hasProductField = item.product !== undefined && item.product !== null;
+      const hasGasProductDetails = item.gas_product_details && Object.keys(item.gas_product_details).length > 0;
+      const hasGasInName = item.item_name && item.item_name.toLowerCase().includes('gas');
+      const hasCorrectItemType = item.item_type === 'gas_product';
+      
+      // ✅ Accept items that have ANY indication of being a gas product
       const isGasProduct = 
-        item.item_type === 'gas_product' || 
-        item.gas_product !== undefined ||
-        item.product_id !== undefined ||
-        item.product !== undefined ||
-        (item.item_name && item.item_name.toLowerCase().includes('gas'));
+        hasCorrectItemType ||
+        hasGasProductField ||
+        hasProductId ||
+        hasProductField ||
+        hasGasProductDetails ||
+        hasGasInName;
       
       console.log(`🔄 Filtering item ${item.id}:`, { 
         item_type: item.item_type,
@@ -188,6 +197,13 @@ const Cart = () => {
         product_id: item.product_id,
         product: item.product,
         item_name: item.item_name,
+        gas_product_details: item.gas_product_details ? 'exists' : 'none',
+        hasGasProductField,
+        hasProductId,
+        hasProductField,
+        hasGasProductDetails,
+        hasGasInName,
+        hasCorrectItemType,
         isGasProduct 
       });
       
@@ -219,6 +235,7 @@ const Cart = () => {
           include_cylinder: item.include_cylinder,
           has_unit_price: item.unit_price !== undefined,
           has_total_price: item.total_price !== undefined,
+          gas_product_details: item.gas_product_details ? Object.keys(item.gas_product_details) : 'none'
         });
       });
     }
@@ -405,7 +422,8 @@ const Cart = () => {
                   item,
                   productDetails,
                   unitPrice,
-                  totalPrice
+                  totalPrice,
+                  item_type: item.item_type // Log the item_type for debugging
                 });
                 
                 return (
@@ -452,6 +470,11 @@ const Cart = () => {
                             <MapPin className="h-3 w-3" />
                             <span>{productDetails.vendor_name}</span>
                           </div>
+                          
+                          {/* Item Type Badge (for debugging) */}
+                          <Badge variant="outline" className="mt-1 text-xs">
+                            Type: {item.item_type}
+                          </Badge>
                           
                           {/* Availability Badge */}
                           {isUnavailable && (

@@ -30,13 +30,12 @@ const Checkout = () => {
   const location = useLocation();
   const { orderItems, totalAmount, cartData } = (location.state as CheckoutState) || {};
 
-  // Calculate order summary
+  // ✅ FIXED: Calculate order summary without tax
   const calculateOrderSummary = () => {
     if (!orderItems || orderItems.length === 0) {
       return {
         subtotal: 0,
         deliveryFee: 0,
-        tax: 0,
         total: 0
       };
     }
@@ -47,18 +46,21 @@ const Checkout = () => {
     // Calculate delivery fee (KSh 200 for demo, or based on vendor/distance)
     const deliveryFee = 200;
     
-    // Calculate tax (16% VAT for Kenya)
-    const tax = subtotal * 0.16;
-    
-    // Calculate total
-    const total = subtotal + deliveryFee + tax;
+    // ✅ REMOVED: Tax calculation since prices already include tax
+    // Calculate total (subtotal + delivery fee only)
+    const total = subtotal + deliveryFee;
 
     return {
       subtotal,
       deliveryFee,
-      tax,
       total
     };
+  };
+
+  // ✅ FIXED: Proper number formatting function
+  const formatCurrency = (amount: number): string => {
+    // Remove any leading zeros and format as proper Kenyan Shillings
+    return `KSh ${Math.round(amount).toLocaleString('en-KE')}`;
   };
 
   const orderSummary = calculateOrderSummary();
@@ -119,9 +121,10 @@ const Checkout = () => {
                   )}
                 </div>
                 <div className="text-right">
-                  <p className="font-semibold">KSh {item.totalAmount.toLocaleString()}</p>
+                  {/* ✅ FIXED: Use proper currency formatting */}
+                  <p className="font-semibold">{formatCurrency(item.totalAmount)}</p>
                   <p className="text-sm text-muted-foreground">
-                    KSh {item.unitPrice.toLocaleString()} each
+                    {formatCurrency(item.unitPrice)} each
                   </p>
                 </div>
               </div>
@@ -135,24 +138,24 @@ const Checkout = () => {
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Subtotal ({orderItems.length} items)</span>
-              <span>KSh {orderSummary.subtotal.toLocaleString()}</span>
+              {/* ✅ FIXED: Use proper currency formatting */}
+              <span>{formatCurrency(orderSummary.subtotal)}</span>
             </div>
             
             <div className="flex justify-between">
               <span className="text-muted-foreground">Delivery Fee</span>
-              <span>KSh {orderSummary.deliveryFee.toLocaleString()}</span>
+              {/* ✅ FIXED: Use proper currency formatting */}
+              <span>{formatCurrency(orderSummary.deliveryFee)}</span>
             </div>
             
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Tax (16% VAT)</span>
-              <span>KSh {orderSummary.tax.toLocaleString()}</span>
-            </div>
+            {/* ✅ REMOVED: Tax row since prices already include tax */}
             
             <Separator className="my-2" />
             
             <div className="flex justify-between text-base font-bold">
               <span>Total Amount</span>
-              <span className="text-primary">KSh {orderSummary.total.toLocaleString()}</span>
+              {/* ✅ FIXED: Use proper currency formatting */}
+              <span className="text-primary">{formatCurrency(orderSummary.total)}</span>
             </div>
           </div>
         </Card>
@@ -191,7 +194,8 @@ const Checkout = () => {
             } 
           })}
         >
-          Proceed to Payment (KSh {orderSummary.total.toLocaleString()})
+          {/* ✅ FIXED: Use proper currency formatting in button */}
+          Proceed to Payment ({formatCurrency(orderSummary.total)})
         </Button>
       </div>
 

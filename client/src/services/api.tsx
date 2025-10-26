@@ -1,7 +1,7 @@
 // src/services/api.tsx
 import axios from 'axios';
 
-const API_BASE_URL = 'https://api.zenoservices.co.ke/api';
+const API_BASE_URL = 'http://127.0.0.1:8000/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -84,7 +84,183 @@ api.interceptors.response.use(
   }
 );
 
-// Define types
+// ========== ENHANCED TYPES FOR VENDOR DASHBOARD ==========
+
+// Vendor Dashboard Analytics Types
+export interface VendorDashboardAnalytics {
+  // Financial Analytics
+  total_earnings: number;
+  available_balance: number;
+  pending_payouts: number;
+  total_paid_out: number;
+  next_payout_amount: number;
+  
+  // Order Analytics
+  total_orders_count: number;
+  completed_orders_count: number;
+  order_completion_rate: number;
+  active_customers_count: number;
+  
+  // Product Analytics
+  total_gas_products: number;
+  available_gas_products: number;
+  low_stock_products: number;
+  out_of_stock_products: number;
+  
+  // Commission Analytics
+  commission_rate: number;
+  average_commission: number;
+  
+  // Payout Status
+  has_payout_preference: boolean;
+  payout_preference?: VendorPayoutPreference;
+  
+  // Recent Activity
+  recent_earnings: VendorEarning[];
+  recent_payouts: PayoutTransaction[];
+  
+  // Basic Info
+  business_name: string;
+  average_rating: number;
+  total_reviews: number;
+  is_verified: boolean;
+}
+
+export interface VendorOrderAnalytics {
+  date_period: string;
+  total_orders: number;
+  pending_orders: number;
+  completed_orders: number;
+  cancelled_orders: number;
+  total_revenue: number;
+  total_commission: number;
+  net_earnings: number;
+  average_order_value: number;
+  order_completion_rate: number;
+  daily_orders: Array<{ date: string; count: number }>;
+  weekly_revenue: Array<{ week: number; revenue: number }>;
+}
+
+export interface VendorEarning {
+  id: number;
+  earning_type: 'order' | 'commission' | 'refund' | 'bonus';
+  gross_amount: number;
+  commission_rate: number;
+  commission_amount: number;
+  net_amount: number;
+  status: 'pending' | 'processed' | 'paid' | 'failed';
+  order_id?: number;
+  order_total?: number;
+  customer_name?: string;
+  description?: string;
+  created_at: string;
+  processed_at?: string;
+}
+
+export interface VendorPayoutPreference {
+  id: number;
+  payout_method: 'mpesa' | 'bank_transfer' | 'cash';
+  mobile_money_number?: string;
+  mobile_money_name?: string;
+  bank_name?: string;
+  bank_type?: string;
+  account_number?: string;
+  account_name?: string;
+  branch_code?: string;
+  swift_code?: string;
+  is_verified: boolean;
+  verification_document?: string;
+  auto_payout: boolean;
+  payout_threshold: number;
+  payout_details_summary: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PayoutTransaction {
+  id: number;
+  vendor: number;
+  vendor_name: string;
+  payout_method: string;
+  payout_reference: string;
+  amount: number;
+  currency: string;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  recipient_details: any;
+  gateway_response: any;
+  initiated_at: string;
+  processed_at?: string;
+  completed_at?: string;
+  description?: string;
+  earnings_count?: number;
+  earnings_total?: number;
+}
+
+export interface VendorPerformance {
+  id: number;
+  total_orders: number;
+  completed_orders: number;
+  cancelled_orders: number;
+  average_order_value: number;
+  total_revenue: number;
+  total_commission: number;
+  total_earnings: number;
+  repeat_customers: number;
+  customer_satisfaction_score: number;
+  completion_rate: number;
+  cancellation_rate: number;
+  last_order_date?: string;
+  metrics_updated_at: string;
+}
+
+// Vendor Dashboard Stats
+export interface VendorStats {
+  gas_products: {
+    total: number;
+    available: number;
+    low_stock: number;
+  };
+  services: {
+    total: number;
+    available: number;
+  };
+  orders: {
+    total: number;
+    pending: number;
+    completed: number;
+  };
+  financial: {
+    total_earnings: number;
+    available_balance: number;
+    pending_payouts: number;
+    total_paid_out: number;
+    currency: string;
+  };
+  ratings: {
+    average: number;
+    total_reviews: number;
+  };
+}
+
+// Bulk Operations Types
+export interface BulkOrderStatusUpdate {
+  order_ids: number[];
+  status: string;
+  note?: string;
+}
+
+export interface BulkOrderStatusUpdateResult {
+  message: string;
+  results: Array<{
+    order_id: number;
+    success: boolean;
+    new_status?: string;
+    error?: string;
+  }>;
+}
+
+// ========== EXISTING TYPES (KEPT FOR COMPATIBILITY) ==========
+
 export interface LoginData {
   phone_number: string;
   password: string;
@@ -110,7 +286,6 @@ export interface VerifyOTPData {
 export interface UpdateOTPChannelData {
   preferred_otp_channel: string;
 }
-
 
 export interface ResendOTPData {
   phone_number: string;
@@ -167,11 +342,16 @@ export interface VendorFilters {
 
 export interface OrderFilters {
   status?: string;
+  payment_status?: string;
+  order_type?: string;
+  priority?: string;
+  date_from?: string;
+  date_to?: string;
   customer?: number;
   vendor?: number;
 }
 
-// Gas Products Types
+// ✅ UPDATED: Gas Products Types to match backend
 export interface GasProduct {
   id: number;
   name: string;
@@ -186,11 +366,11 @@ export interface GasProduct {
   description?: string;
   ingredients?: string;
   safety_instructions?: string;
-  is_available: boolean;
-  is_active: boolean;
+  is_available: boolean; // ✅ This matches your backend
+  is_active: boolean;    // ✅ This matches your backend
   featured: boolean;
-  in_stock: boolean;
-  low_stock: boolean;
+  in_stock: boolean;     // ✅ Calculated field
+  low_stock: boolean;    // ✅ Calculated field
   vendor: number;
   vendor_name: string;
   vendor_city: string;
@@ -361,6 +541,8 @@ export interface CreateOrderData {
   special_instructions?: string;
 }
 
+// ========== ENHANCED API ENDPOINTS ==========
+
 // Auth API
 export const authAPI = {
   login: (credentials: LoginData) => api.post('/auth/login/', credentials),
@@ -388,7 +570,7 @@ export const servicesAPI = {
   deleteService: (id: number) => api.delete(`/services/${id}/`),
 };
 
-// Vendors API
+// ========== ENHANCED VENDORS API WITH DASHBOARD ENDPOINTS ==========
 export const vendorsAPI = {
   // Vendor management
   getVendors: (filters?: VendorFilters) => api.get('/vendors/vendors/', { params: filters }),
@@ -396,7 +578,24 @@ export const vendorsAPI = {
   getMyVendor: () => api.get('/vendors/vendors/my_vendor/'),
   registerVendor: (data: VendorCreateData) => api.post('/vendors/vendors/', data),
   updateVendor: (id: number, data: VendorUpdateData) => api.patch(`/vendors/vendors/${id}/`, data),
+  
+  // Vendor Dashboard & Analytics
   getVendorDashboard: () => api.get('/vendors/vendors/my_vendor/vendor_dashboard/'),
+  getVendorDashboardAnalytics: () => api.get('/vendors/vendors/my_vendor/vendor_dashboard_analytics/'),
+  getVendorStats: () => api.get('/vendors/vendors/vendor_stats/'),
+  getOrderAnalytics: (period?: string) => api.get('/vendors/vendors/my_vendor/order_analytics/', { 
+    params: { period } 
+  }),
+  updatePerformanceMetrics: () => api.post('/vendors/vendors/my_vendor/update_performance_metrics/'),
+  
+  // Vendor Earnings & Payouts
+  getEarnings: (filters?: { type?: string; status?: string; date_from?: string; date_to?: string }) => 
+    api.get('/vendors/vendors/my_vendor/earnings/', { params: filters }),
+  getPayoutHistory: () => api.get('/vendors/vendors/my_vendor/payout_history/'),
+  
+  // Payout Preferences
+  getPayoutPreferences: () => api.get('/vendors/vendors/my_vendor/payout_preferences/'),
+  updatePayoutPreferences: (data: any) => api.put('/vendors/vendors/my_vendor/payout_preferences/', data),
   
   // Vendor location and discovery
   getNearbyVendors: (lat: number, lng: number, radius: number = 10, business_type?: string) => 
@@ -420,7 +619,7 @@ export const vendorsAPI = {
   deleteOperatingHours: (id: number) => api.delete(`/vendors/operating-hours/${id}/`),
 };
 
-// Gas Products API
+// ========== ENHANCED GAS PRODUCTS API ==========
 export const gasProductsAPI = {
   // Product management
   getGasProducts: (filters?: GasProductFilters) => api.get('/vendors/gas-products/', { params: filters }),
@@ -464,25 +663,47 @@ export const gasProductsAPI = {
   setPrimaryImage: (imageId: number) => api.post(`/vendors/product-images/${imageId}/set_primary/`),
 };
 
-// Orders API
+// ✅ UPDATED: ORDERS API WITH CORRECT ENDPOINTS
 export const ordersAPI = {
-  getOrders: (filters?: OrderFilters) => api.get('/orders/', { params: filters }),
-  getOrder: (id: number) => api.get(`/orders/${id}/`),
-  createOrder: (data: CreateOrderData) => api.post('/orders/', data),
-  updateOrder: (id: number, data: any) => api.put(`/orders/${id}/`, data),
-  cancelOrder: (id: number) => api.post(`/orders/${id}/cancel/`),
+  // ✅ FIXED: Basic order operations matching your Django endpoints
+  getOrders: (filters?: OrderFilters) => api.get('/orders/orders/', { params: filters }),
+  getOrder: (id: number) => api.get(`/orders/orders/${id}/`),
+  createOrder: (data: CreateOrderData) => api.post('/orders/orders/', data),
+  updateOrder: (id: number, data: any) => api.patch(`/orders/orders/${id}/`, data),
+  cancelOrder: (id: number) => api.post(`/orders/orders/${id}/cancel/`),
   
-  // Customer orders
-  getMyOrders: () => api.get('/orders/my_orders/'),
+  // ✅ FIXED: Customer orders
+  getMyOrders: () => api.get('/orders/orders/my_orders/'),
   
-  // Vendor orders
-  getVendorOrders: () => api.get('/orders/vendor_orders/'),
-  updateOrderStatus: (orderId: number, status: string) => 
-    api.patch(`/orders/${orderId}/update_status/`, { status }),
+  // ✅ FIXED: Vendor orders management - USE CORRECT ENDPOINTS
+  getVendorOrders: (filters?: OrderFilters) => api.get('/orders/orders/vendor/orders/', { params: filters }),
+  getVendorDashboardOrders: () => api.get('/orders/orders/vendor/dashboard/'),
+  getGasProductOrders: (filters?: { status?: string }) => api.get('/orders/orders/vendor/gas_products/', { params: filters }),
+  
+  // ✅ FIXED: Order actions - USE CORRECT ENDPOINTS
+  updateOrderStatus: (orderId: number, status: string, note?: string) => 
+    api.post(`/orders/orders/${orderId}/update_status/`, { status, note }),
+  updateOrderPriority: (orderId: number, priority: string) => 
+    api.post(`/orders/orders/${orderId}/update_priority/`, { priority }),
+  updateCompletionTime: (orderId: number, estimatedCompletionTime: string) => 
+    api.post(`/orders/orders/${orderId}/update_completion_time/`, { estimated_completion_time: estimatedCompletionTime }),
+  
+  // ✅ FIXED: Bulk operations
+  bulkUpdateStatus: (data: BulkOrderStatusUpdate) => 
+    api.post('/orders/orders/vendor/bulk_update_status/', data),
+  
+  // ✅ FIXED: Analytics
+  getVendorAnalytics: (days?: number) => 
+    api.get('/orders/orders/vendor/analytics/', { params: { days } }),
+  
+  // ✅ FIXED: Tracking
+  getOrderTracking: (orderId: number) => 
+    api.get(`/orders/orders/${orderId}/tracking/`),
 };
 
-// Payments API
+// ========== ENHANCED PAYMENTS API WITH VENDOR PAYOUTS ==========
 export const paymentsAPI = {
+  // Payment operations
   createPayment: (data: any) => api.post('/payments/', data),
   getPayment: (id: number) => api.get(`/payments/${id}/`),
   verifyPayment: (id: number) => api.post(`/payments/${id}/verify/`),
@@ -490,289 +711,369 @@ export const paymentsAPI = {
   // Order payments
   createOrderPayment: (orderId: number, paymentMethod: string) => 
     api.post('/payments/create_order_payment/', { order: orderId, payment_method: paymentMethod }),
+  
+  // Vendor payouts
+  getPayoutRequests: () => api.get('/payments/payout-requests/'),
+  createPayoutRequest: (data: any) => api.post('/payments/payout-requests/', data),
+  approvePayoutRequest: (payoutRequestId: number) => 
+    api.post(`/payments/payout-requests/${payoutRequestId}/approve/`),
+  processPayoutRequest: (payoutRequestId: number) => 
+    api.post(`/payments/payout-requests/${payoutRequestId}/process/`),
+  
+  // Commission management
+  processCommission: (paymentId: number, commissionRate?: number) => 
+    api.post(`/payments/${paymentId}/process_commission/`, { commission_rate: commissionRate }),
 };
 
-// ✅ UPDATED: Cart API with proper localStorage array handling
+// ========== VENDOR DASHBOARD SPECIFIC API ==========
+export const vendorDashboardAPI = {
+  // Comprehensive dashboard data
+  getDashboardOverview: () => vendorsAPI.getVendorDashboard(),
+  getDashboardAnalytics: () => vendorsAPI.getVendorDashboardAnalytics(),
+  getVendorStats: () => vendorsAPI.getVendorStats(),
+  
+  // Financial data
+  getEarnings: (filters?: any) => vendorsAPI.getEarnings(filters),
+  getPayoutHistory: () => vendorsAPI.getPayoutHistory(),
+  
+  // Order analytics
+  getOrderAnalytics: (period?: string) => vendorsAPI.getOrderAnalytics(period),
+  getVendorOrderAnalytics: (days?: number) => ordersAPI.getVendorAnalytics(days),
+  
+  // Products management
+  getMyProducts: () => gasProductsAPI.getMyProducts(),
+  
+  // Orders management
+  getVendorOrders: (filters?: OrderFilters) => ordersAPI.getVendorOrders(filters),
+  getDashboardOrders: () => ordersAPI.getVendorDashboardOrders(),
+  
+  // Payout preferences
+  getPayoutPreferences: () => vendorsAPI.getPayoutPreferences(),
+  updatePayoutPreferences: (data: any) => vendorsAPI.updatePayoutPreferences(data),
+};
+
+// ========== VENDOR PAYOUT MANAGEMENT API ==========
+export const vendorPayoutsAPI = {
+  // Payout preferences
+  getPayoutPreferences: () => api.get('/vendors/payout-preferences/'),
+  createPayoutPreference: (data: any) => api.post('/vendors/payout-preferences/', data),
+  updatePayoutPreference: (id: number, data: any) => api.put(`/vendors/payout-preferences/${id}/`, data),
+  
+  // Earnings
+  getEarnings: (filters?: any) => api.get('/vendors/vendor-earnings/', { params: filters }),
+  getEarning: (id: number) => api.get(`/vendors/vendor-earnings/${id}/`),
+  
+  // Payout transactions
+  getPayoutTransactions: (filters?: any) => api.get('/vendors/payout-transactions/', { params: filters }),
+  getPayoutTransaction: (id: number) => api.get(`/vendors/payout-transactions/${id}/`),
+};
+
+// ✅ UPDATED: CART API WITH CORRECT DJANGO ENDPOINTS
 export const cartAPI = {
-  // Get user's cart from backend
-  getCart: async () => {
+  // ✅ FIXED: Get cart from backend
+  getCart: async (): Promise<any> => {
     try {
-      const token = localStorage.getItem('access_token');
-      if (token) {
-        const response = await api.get('/orders/cart/my_cart/');
-        console.log('🛒 Backend cart response:', response.data);
-        return response.data;
-      } else {
-        // Fallback to localStorage for guest users
-        return cartAPI.getLocalStorageCart();
-      }
-    } catch (error: any) {
-      console.error('Error fetching cart from backend:', error);
-      
-      // If it's a timeout or network error, fallback to localStorage
-      if (error.code === 'ECONNABORTED' || !error.response) {
-        console.log('🛒 Using localStorage fallback due to timeout');
-        return cartAPI.getLocalStorageCart();
-      }
-      
-      // For 401 errors, user might not be properly authenticated
-      if (error.response?.status === 401) {
-        console.log('🛒 User not authenticated, using localStorage');
-        return cartAPI.getLocalStorageCart();
-      }
-      
-      // For other errors, still fallback to localStorage
-      return cartAPI.getLocalStorageCart();
-    }
-  },
-
-  // Add gas product to cart
-  addGasProduct: async (productId: number, quantity: number = 1) => {
-  try {
-    const token = localStorage.getItem('access_token');
-    if (token) {
-      console.log('🛒 Adding to backend cart:', { productId, quantity });
-      const response = await api.post('/orders/cart/add_gas_product/', {
-        product_id: productId,
-        quantity: quantity
-      });
-      console.log('🛒 Backend add to cart response:', response.data);
+      const response = await api.get('/orders/cart/my_cart/');
+      console.log('🛒 Backend cart response:', response.data);
       return response.data;
-    } else {
-      console.log('🛒 Adding to localStorage cart:', { productId, quantity });
-      const result = cartAPI.addToLocalStorage(productId, quantity);
-      console.log('🛒 localStorage cart after add:', result);
-      return result;
+    } catch (error: any) {
+      console.error('❌ Error fetching cart from backend:', error);
+      // Return empty cart structure if 404 (cart doesn't exist yet)
+      if (error.response?.status === 404) {
+        return {
+          id: null,
+          items: [],
+          total_amount: 0,
+          item_count: 0,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+      }
+      throw error;
     }
-  } catch (error: any) {
-    console.error('Error adding to cart:', error);
+  },
+
+  // ✅ FIXED: Add gas product to cart - USE CORRECT ENDPOINT AND PAYLOAD
+  addGasProduct: async (productId: number, quantity: number = 1, includeCylinder: boolean = false): Promise<any> => {
+    const payload = {
+      product_id: productId, // ✅ CORRECT FIELD NAME
+      quantity: quantity,
+      include_cylinder: includeCylinder
+      // ✅ item_type is handled by backend
+    };
+
+    console.log('📦 Sending payload to backend:', payload);
     
-    if (error.response?.status === 401) {
-      throw new Error('Please log in to add items to cart');
-    } else if (error.code === 'ECONNABORTED' || !error.response) {
-      console.log('🛒 Backend timeout, using localStorage fallback');
-      const result = cartAPI.addToLocalStorage(productId, quantity);
-      console.log('🛒 localStorage cart after fallback:', result);
-      return result;
-    } else {
-      console.log('🛒 Other error, using localStorage fallback');
-      const result = cartAPI.addToLocalStorage(productId, quantity);
-      console.log('🛒 localStorage cart after error fallback:', result);
-      return result;
-    }
-  }
-},
-
-  // Update item quantity
-  updateQuantity: async (itemId: number, quantity: number) => {
-    try {
-      const token = localStorage.getItem('access_token');
-      if (token) {
-        const response = await api.post('/orders/cart/update_quantity/', {
-          item_id: itemId,
-          quantity: quantity
-        });
-        return response.data;
-      } else {
-        return cartAPI.updateLocalStorageItem(itemId, quantity);
-      }
-    } catch (error: any) {
-      console.error('Error updating quantity:', error);
-      if (error.code === 'ECONNABORTED' || !error.response) {
-        return cartAPI.updateLocalStorageItem(itemId, quantity);
-      }
-      throw error;
-    }
+    // ✅ USE CORRECT ENDPOINT: /orders/cart/add_gas_product/
+    const response = await api.post('/orders/cart/add_gas_product/', payload);
+    console.log('✅ Gas product added to cart:', response.data);
+    return response.data;
   },
 
-  // Remove item from cart
-  removeItem: async (itemId: number) => {
-    try {
-      const token = localStorage.getItem('access_token');
-      if (token) {
-        const response = await api.post('/orders/cart/remove_item/', {
-          item_id: itemId
-        });
-        return response.data;
-      } else {
-        return cartAPI.removeFromLocalStorage(itemId);
-      }
-    } catch (error: any) {
-      console.error('Error removing item:', error);
-      if (error.code === 'ECONNABORTED' || !error.response) {
-        return cartAPI.removeFromLocalStorage(itemId);
-      }
-      throw error;
-    }
+  // ✅ FIXED: Update cart item quantity - USE CORRECT ENDPOINT
+  updateCartItem: async (itemId: number, quantity: number): Promise<any> => {
+    const payload = {
+      item_id: itemId, // ✅ CORRECT FIELD NAME
+      quantity: quantity
+    };
+    
+    const response = await api.post('/orders/cart/update_quantity/', payload);
+    console.log('✅ Cart item updated:', response.data);
+    return response.data;
   },
 
-  // Clear entire cart
-  clearCart: async () => {
-    try {
-      const token = localStorage.getItem('access_token');
-      if (token) {
-        const response = await api.post('/orders/cart/clear/');
-        return response.data;
-      } else {
-        return cartAPI.clearLocalStorage();
-      }
-    } catch (error: any) {
-      console.error('Error clearing cart:', error);
-      if (error.code === 'ECONNABORTED' || !error.response) {
-        return cartAPI.clearLocalStorage();
-      }
-      throw error;
-    }
+  // ✅ FIXED: Remove item from cart - USE CORRECT ENDPOINT
+  removeFromCart: async (itemId: number): Promise<any> => {
+    const payload = {
+      item_id: itemId // ✅ CORRECT FIELD NAME
+    };
+    
+    const response = await api.post('/orders/cart/remove_item/', payload);
+    console.log('✅ Item removed from cart');
+    return response.data;
   },
 
-  // ✅ FIXED: Improved localStorage helper functions with array detection
+  // ✅ FIXED: Clear entire cart - USE CORRECT ENDPOINT
+  clearCart: async (): Promise<any> => {
+    const response = await api.post('/orders/cart/clear/');
+    console.log('✅ Cart cleared:', response.data);
+    return response.data;
+  },
+
+  // ✅ FIXED: Sync localStorage cart (if needed)
+  syncLocalStorageCart: async (): Promise<any> => {
+    const localCart = localStorage.getItem('local_cart');
+    if (localCart) {
+      try {
+        const cartData = JSON.parse(localCart);
+        console.log('🔄 Syncing localStorage cart items to server...');
+        
+        // Sync local cart items to server using correct endpoint
+        for (const item of cartData.items) {
+          await api.post('/orders/cart/add_gas_product/', {
+            product_id: item.product_id,
+            quantity: item.quantity,
+            include_cylinder: item.include_cylinder
+          });
+        }
+        
+        // Clear local cart after sync
+        localStorage.removeItem('local_cart');
+        console.log('✅ LocalStorage cart synced to backend');
+        
+        return { success: true, message: 'Cart synced successfully' };
+      } catch (error) {
+        console.error('❌ Error syncing local cart:', error);
+        return { success: false, message: 'Failed to sync cart' };
+      }
+    }
+    return { success: true, message: 'No items to sync' };
+  },
+
+  // ========== LOCALSTORAGE METHODS (FALLBACK FOR UNAUTHENTICATED USERS) ==========
+
+  // Get cart from localStorage
   getLocalStorageCart: () => {
     try {
-      const cart = localStorage.getItem('gaslink_cart');
-      if (cart) {
-        const parsedCart = JSON.parse(cart);
-        console.log('🛒 LocalStorage cart:', parsedCart);
-        
-        // ✅ Handle case where cart is stored as array instead of object
-        if (Array.isArray(parsedCart)) {
-          console.log('🛒 Converting array cart to object format');
-          const convertedCart = {
-            items: parsedCart,
-            total_amount: parsedCart.reduce((sum: number, item: any) => sum + (item.total_price || 0), 0),
-            item_count: parsedCart.reduce((count: number, item: any) => count + (item.quantity || 0), 0),
-            updated_at: new Date().toISOString()
-          };
-          // Save the corrected format back to localStorage
-          localStorage.setItem('gaslink_cart', JSON.stringify(convertedCart));
-          return convertedCart;
+      const cartData = localStorage.getItem('local_cart');
+      if (cartData) {
+        return JSON.parse(cartData);
+      }
+      return { 
+        id: null, 
+        items: [], 
+        total_amount: 0, 
+        item_count: 0,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+    } catch (error) {
+      console.error('Error reading cart from localStorage:', error);
+      return { 
+        id: null, 
+        items: [], 
+        total_amount: 0, 
+        item_count: 0,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+    }
+  },
+
+  // Add product to localStorage cart
+  addToLocalStorageCart: (productId: number, quantity: number = 1, includeCylinder: boolean = false) => {
+    try {
+      const currentCart = cartAPI.getLocalStorageCart();
+      
+      // Generate a unique item ID
+      const itemId = Date.now();
+      
+      // Create mock product data for display
+      const mockProduct = {
+        id: productId,
+        name: `Gas Product ${productId}`,
+        gas_type: 'lpg',
+        cylinder_size: '13kg',
+        brand: 'Generic',
+        price_with_cylinder: 3000,
+        price_without_cylinder: 2500,
+        vendor_name: 'Gas Vendor',
+        vendor_city: 'Nairobi',
+        is_available: true,
+        in_stock: true
+      };
+      
+      const existingItemIndex = currentCart.items.findIndex(
+        (item: any) => item.product_id === productId && item.include_cylinder === includeCylinder
+      );
+
+      if (existingItemIndex > -1) {
+        // Update existing item
+        currentCart.items[existingItemIndex].quantity += quantity;
+        currentCart.items[existingItemIndex].total_price = 
+          currentCart.items[existingItemIndex].quantity * 
+          (includeCylinder ? mockProduct.price_with_cylinder : mockProduct.price_without_cylinder);
+      } else {
+        // Add new item
+        const unitPrice = includeCylinder ? mockProduct.price_with_cylinder : mockProduct.price_without_cylinder;
+        currentCart.items.push({
+          id: itemId,
+          item_type: 'gas_product',
+          gas_product: productId,
+          product_id: productId,
+          quantity: quantity,
+          unit_price: unitPrice,
+          total_price: unitPrice * quantity,
+          include_cylinder: includeCylinder,
+          item_name: mockProduct.name,
+          gas_product_details: mockProduct,
+          added_at: new Date().toISOString()
+        });
+      }
+
+      // Recalculate totals
+      currentCart.item_count = currentCart.items.reduce((sum: number, item: any) => sum + item.quantity, 0);
+      currentCart.total_amount = currentCart.items.reduce((sum: number, item: any) => sum + item.total_price, 0);
+      currentCart.updated_at = new Date().toISOString();
+
+      localStorage.setItem('local_cart', JSON.stringify(currentCart));
+      
+      console.log('✅ Product added to localStorage cart:', { productId, quantity, includeCylinder });
+      return { 
+        success: true, 
+        message: 'Added to cart',
+        cart: currentCart
+      };
+    } catch (error) {
+      console.error('Error adding to localStorage cart:', error);
+      return { 
+        success: false, 
+        message: 'Failed to add to cart',
+        cart: { items: [], total_amount: 0, item_count: 0 }
+      };
+    }
+  },
+
+  // Update localStorage cart item
+  updateLocalStorageCartItem: (itemId: number, quantity: number) => {
+    try {
+      const currentCart = cartAPI.getLocalStorageCart();
+      const itemIndex = currentCart.items.findIndex((item: any) => item.id === itemId);
+
+      if (itemIndex > -1) {
+        if (quantity <= 0) {
+          // Remove item if quantity is 0 or less
+          currentCart.items.splice(itemIndex, 1);
+        } else {
+          // Update quantity
+          currentCart.items[itemIndex].quantity = quantity;
+          currentCart.items[itemIndex].total_price = 
+            currentCart.items[itemIndex].quantity * currentCart.items[itemIndex].unit_price;
         }
+
+        // Recalculate totals
+        currentCart.item_count = currentCart.items.reduce((sum: number, item: any) => sum + item.quantity, 0);
+        currentCart.total_amount = currentCart.items.reduce((sum: number, item: any) => sum + item.total_price, 0);
+        currentCart.updated_at = new Date().toISOString();
+
+        localStorage.setItem('local_cart', JSON.stringify(currentCart));
         
-        return parsedCart;
+        console.log('✅ LocalStorage cart item updated:', { itemId, quantity });
+        return { 
+          success: true, 
+          message: 'Cart updated',
+          cart: currentCart
+        };
+      } else {
+        throw new Error('Item not found in cart');
       }
     } catch (error) {
-      console.error('Error reading localStorage cart:', error);
-    }
-    
-    // Return empty cart structure
-    const emptyCart = {
-      items: [],
-      total_amount: 0,
-      item_count: 0,
-      updated_at: new Date().toISOString()
-    };
-    console.log('🛒 Created new empty cart');
-    return emptyCart;
-  },
-
-  // ✅ FIXED: Improved addToLocalStorage with proper structure validation
-  addToLocalStorage: (productId: number, quantity: number = 1) => {
-    const cart = cartAPI.getLocalStorageCart();
-    
-    // ✅ Ensure cart has the correct structure
-    if (!cart.items) {
-      cart.items = [];
-    }
-    if (cart.total_amount === undefined) {
-      cart.total_amount = 0;
-    }
-    if (cart.item_count === undefined) {
-      cart.item_count = 0;
-    }
-    
-    // Check if product already exists in cart
-    const existingItemIndex = cart.items.findIndex((item: any) => 
-      item.gas_product === productId || item.product_id === productId
-    );
-    
-    if (existingItemIndex > -1) {
-      cart.items[existingItemIndex].quantity += quantity;
-      if (cart.items[existingItemIndex].unit_price) {
-        cart.items[existingItemIndex].total_price = 
-          cart.items[existingItemIndex].unit_price * cart.items[existingItemIndex].quantity;
-      }
-    } else {
-      const newItem = {
-        id: Date.now(),
-        item_type: 'gas_product',
-        gas_product: productId,
-        product_id: productId, // Add both for compatibility
-        quantity: quantity,
-        unit_price: 0, // Will be updated when product details are fetched
-        total_price: 0,
-        added_at: new Date().toISOString(),
-        item_name: 'Gas Product'
+      console.error('Error updating localStorage cart item:', error);
+      return { 
+        success: false, 
+        message: 'Failed to update cart',
+        cart: cartAPI.getLocalStorageCart()
       };
-      cart.items.push(newItem);
     }
-    
-    // Update cart totals
-    cart.total_amount = cart.items.reduce((sum: number, item: any) => sum + (item.total_price || 0), 0);
-    cart.item_count = cart.items.reduce((count: number, item: any) => count + (item.quantity || 0), 0);
-    cart.updated_at = new Date().toISOString();
-    
-    localStorage.setItem('gaslink_cart', JSON.stringify(cart));
-    console.log('🛒 Updated localStorage cart:', cart);
-    return cart;
   },
 
-  updateLocalStorageItem: (itemId: number, quantity: number) => {
-    const cart = cartAPI.getLocalStorageCart();
-    const itemIndex = cart.items.findIndex((item: any) => item.id === itemId);
-    
-    if (itemIndex > -1) {
-      if (quantity <= 0) {
-        cart.items.splice(itemIndex, 1);
-      } else {
-        cart.items[itemIndex].quantity = quantity;
-        if (cart.items[itemIndex].unit_price) {
-          cart.items[itemIndex].total_price = cart.items[itemIndex].unit_price * quantity;
-        }
-      }
+  // Remove item from localStorage cart
+  removeFromLocalStorageCart: (itemId: number) => {
+    try {
+      const currentCart = cartAPI.getLocalStorageCart();
+      currentCart.items = currentCart.items.filter((item: any) => item.id !== itemId);
+
+      // Recalculate totals
+      currentCart.item_count = currentCart.items.reduce((sum: number, item: any) => sum + item.quantity, 0);
+      currentCart.total_amount = currentCart.items.reduce((sum: number, item: any) => sum + item.total_price, 0);
+      currentCart.updated_at = new Date().toISOString();
+
+      localStorage.setItem('local_cart', JSON.stringify(currentCart));
+      
+      console.log('✅ Item removed from localStorage cart:', itemId);
+      return { 
+        success: true, 
+        message: 'Item removed from cart',
+        cart: currentCart
+      };
+    } catch (error) {
+      console.error('Error removing from localStorage cart:', error);
+      return { 
+        success: false, 
+        message: 'Failed to remove item',
+        cart: cartAPI.getLocalStorageCart()
+      };
     }
-    
-    // Update cart totals
-    cart.total_amount = cart.items.reduce((sum: number, item: any) => sum + (item.total_price || 0), 0);
-    cart.item_count = cart.items.reduce((count: number, item: any) => count + (item.quantity || 0), 0);
-    cart.updated_at = new Date().toISOString();
-    
-    localStorage.setItem('gaslink_cart', JSON.stringify(cart));
-    return cart;
   },
 
-  removeFromLocalStorage: (itemId: number) => {
-    const cart = cartAPI.getLocalStorageCart();
-    cart.items = cart.items.filter((item: any) => item.id !== itemId);
-    
-    // Update cart totals
-    cart.total_amount = cart.items.reduce((sum: number, item: any) => sum + (item.total_price || 0), 0);
-    cart.item_count = cart.items.reduce((count: number, item: any) => count + (item.quantity || 0), 0);
-    cart.updated_at = new Date().toISOString();
-    
-    localStorage.setItem('gaslink_cart', JSON.stringify(cart));
-    return cart;
-  },
-
-  clearLocalStorage: () => {
-    const emptyCart = {
-      items: [],
-      total_amount: 0,
-      item_count: 0,
-      updated_at: new Date().toISOString()
-    };
-    localStorage.setItem('gaslink_cart', JSON.stringify(emptyCart));
-    return emptyCart;
-  },
-
-  // Get cart total for display
-  getCartTotal: async () => {
-    const cart = await cartAPI.getCart();
-    return parseFloat(cart.total_amount) || 0;
-  },
-
-  // Get cart item count for badge
-  getCartItemCount: async () => {
-    const cart = await cartAPI.getCart();
-    return cart.item_count || 0;
+  // Clear localStorage cart
+  clearLocalStorageCart: () => {
+    try {
+      const emptyCart = { 
+        id: null, 
+        items: [], 
+        total_amount: 0, 
+        item_count: 0,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      
+      localStorage.setItem('local_cart', JSON.stringify(emptyCart));
+      
+      console.log('✅ LocalStorage cart cleared');
+      return { 
+        success: true, 
+        message: 'Cart cleared',
+        cart: emptyCart
+      };
+    } catch (error) {
+      console.error('Error clearing localStorage cart:', error);
+      return { 
+        success: false, 
+        message: 'Failed to clear cart',
+        cart: cartAPI.getLocalStorageCart()
+      };
+    }
   }
 };
 
@@ -792,6 +1093,8 @@ export const clearAuthData = (): void => {
   localStorage.removeItem('temp_access_token');
   localStorage.removeItem('temp_refresh_token');
   localStorage.removeItem('temp_user');
+  // Also clear localStorage cart on logout
+  cartAPI.clearLocalStorageCart();
 };
 
 // Helper function for file uploads
@@ -818,17 +1121,13 @@ export const healthAPI = {
 export const safeGasProductsAPI = {
   getGasProducts: async (filters?: GasProductFilters) => {
     try {
-      // Remove problematic filters that might cause 500 errors
       const safeFilters = { ...filters };
-      
-      // Don't send empty or undefined values
       Object.keys(safeFilters).forEach(key => {
         if (safeFilters[key as keyof GasProductFilters] === undefined || safeFilters[key as keyof GasProductFilters] === '') {
           delete safeFilters[key as keyof GasProductFilters];
         }
       });
 
-      // Ensure boolean values are properly formatted
       if (safeFilters.is_available !== undefined) {
         safeFilters.is_available = Boolean(safeFilters.is_available);
       }
@@ -854,16 +1153,36 @@ export const safeGasProductsAPI = {
       return response.data;
     } catch (error: any) {
       console.error('Error in safeGasProductsAPI.getGasProducts:', error);
-      
-      // If there's a 500 error, try without location filters
       if (error.response?.status === 500 && filters?.lat && filters?.lng) {
         console.log('Retrying without location filters...');
         const { lat, lng, radius, ...retryFilters } = filters;
         return gasProductsAPI.getGasProducts(retryFilters);
       }
-      
       throw error;
     }
+  }
+};
+
+// ✅ ADDED: Debug function to test endpoints
+export const testCartEndpoints = async () => {
+  console.log('🧪 Testing cart endpoints...');
+  
+  try {
+    // Test 1: Get cart
+    const cart = await cartAPI.getCart();
+    console.log('✅ GET /orders/cart/my_cart/:', cart);
+    
+    // Test 2: Add product (use a test product ID)
+    const testProductId = 6; // Use your actual product ID
+    try {
+      const addResult = await cartAPI.addGasProduct(testProductId, 1, false);
+      console.log('✅ POST /orders/cart/add_gas_product/:', addResult);
+    } catch (addError: any) {
+      console.log('❌ POST /orders/cart/add_gas_product/ failed:', addError.response?.data);
+    }
+    
+  } catch (error: any) {
+    console.error('❌ Cart endpoint test failed:', error);
   }
 };
 

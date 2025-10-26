@@ -129,6 +129,44 @@ const Payment = () => {
     initializePayment();
   }, [location.state, createOrderFromCart, navigate, toast]);
 
+  // ✅ FIXED: Payment success handling function
+  const handlePaymentSuccess = async (paymentId: number) => {
+    try {
+      console.log('✅ Payment completed successfully!');
+      setPaymentStatus('success');
+      
+      toast({
+        title: "Payment Successful!",
+        description: "Your payment has been confirmed",
+      });
+      
+      // ✅ Only clear cart AFTER successful payment and before navigation
+      await clearCart();
+      
+      // Navigate to success page
+      navigate("/order-confirmation", { 
+        state: { 
+          orderItems: orderItems,
+          orderId: orderId,
+          totalAmount: grandTotal,
+          paymentId: paymentId
+        } 
+      });
+      
+    } catch (error) {
+      console.error('Error during payment success handling:', error);
+      // Even if cart clearing fails, still navigate to success page
+      navigate("/order-confirmation", { 
+        state: { 
+          orderItems: orderItems,
+          orderId: orderId,
+          totalAmount: grandTotal,
+          paymentId: paymentId
+        } 
+      });
+    }
+  };
+
   const formatPhoneNumber = (number: string): string => {
     let cleaned = number.replace(/\D/g, '');
     
@@ -375,28 +413,11 @@ const Payment = () => {
             const paymentStatusData: PaymentStatusResponse = JSON.parse(responseText);
             console.log('💰 Payment status check result:', paymentStatusData);
             
+            // ✅ FIXED: Use the new handlePaymentSuccess function
             if (paymentStatusData.status === 'completed') {
               isCompleted = true;
               clearInterval(interval);
-              setPaymentStatus('success');
-              console.log('✅ Payment completed successfully!');
-              toast({
-                title: "Payment Successful!",
-                description: "Your payment has been confirmed",
-              });
-              
-              // ✅ Clear cart and navigate to success page
-              setTimeout(() => {
-                clearCart();
-                navigate("/order-confirmation", { 
-                  state: { 
-                    orderItems: orderItems,
-                    orderId: orderId,
-                    totalAmount: grandTotal,
-                    paymentId: paymentId
-                  } 
-                });
-              }, 2000);
+              await handlePaymentSuccess(paymentId); // Use the new function
               
             } else if (paymentStatusData.status === 'failed') {
               isCompleted = true;
@@ -578,7 +599,6 @@ const Payment = () => {
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <h1 className="text-xl font-semibold">Payment</h1>
-          
         </div>
       </header>
 
