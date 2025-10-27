@@ -219,12 +219,7 @@ const RoadsideServices = () => {
 
       // If all endpoints fail, show mock data for demonstration
       console.log('All API endpoints failed, using mock data');
-      setProviders(getMockProviders());
-      toast({
-        title: "Demo Mode",
-        description: "Showing demo data. Real providers will load when API is available.",
-        variant: "default"
-      });
+    
 
     } catch (error) {
       console.error('All alternative endpoints failed:', error);
@@ -236,92 +231,7 @@ const RoadsideServices = () => {
     }
   };
 
-  // Mock data for demonstration when API is unavailable
-  const getMockProviders = (): ServiceProvider[] => [
-    {
-      id: 1,
-      business_name: "Nairobi Auto Repair",
-      business_type: "mechanic",
-      description: "24/7 mechanical services and roadside assistance",
-      address: "Mombasa Road, Nairobi",
-      city: "Nairobi",
-      contact_number: "+254712345678",
-      average_rating: "4.5",
-      total_reviews: 124,
-      latitude: "-1.286389",
-      longitude: "36.817223",
-      is_verified: true,
-      services: [
-        {
-          id: 1,
-          name: "Emergency Towing",
-          description: "Vehicle towing services",
-          price: "2500",
-          available: true
-        },
-        {
-          id: 2,
-          name: "Tire Change",
-          description: "Flat tire replacement",
-          price: "800",
-          available: true
-        }
-      ]
-    },
-    {
-      id: 2,
-      business_name: "Shell Station Westlands",
-      business_type: "gas_station",
-      description: "Fuel station with roadside assistance",
-      address: "Westlands, Nairobi",
-      city: "Nairobi",
-      contact_number: "+254723456789",
-      average_rating: "4.2",
-      total_reviews: 89,
-      latitude: "-1.265590",
-      longitude: "36.806360",
-      is_verified: true,
-      services: [
-        {
-          id: 3,
-          name: "Fuel Delivery",
-          description: "Emergency fuel delivery",
-          price: "1500",
-          available: true
-        }
-      ]
-    },
-    {
-      id: 3,
-      business_name: "City Tow Services",
-      business_type: "roadside_assistance",
-      description: "Professional towing and recovery services",
-      address: "Thika Road, Nairobi",
-      city: "Nairobi",
-      contact_number: "+254734567890",
-      average_rating: "4.7",
-      total_reviews: 156,
-      latitude: "-1.238270",
-      longitude: "36.830270",
-      is_verified: true,
-      services: [
-        {
-          id: 4,
-          name: "Heavy Duty Towing",
-          description: "Towing for trucks and large vehicles",
-          price: "5000",
-          available: true
-        },
-        {
-          id: 5,
-          name: "Light Towing",
-          description: "Towing for cars and small vehicles",
-          price: "2000",
-          available: true
-        }
-      ]
-    }
-  ];
+  
 
   const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: number): string => {
     if (!userLocation) return "Unknown";
