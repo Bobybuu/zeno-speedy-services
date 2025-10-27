@@ -49,7 +49,7 @@ const Register = () => {
     
     // Vendor Business Information (shown only for vendor/mechanic)
     businessName: "",
-    businessType: "gas_services",
+    businessType: "gas_station", // ✅ FIXED: Changed default to backend value
     businessDescription: "",
     businessAddress: "",
     businessCity: "",
@@ -66,14 +66,15 @@ const Register = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const isVendorType = formData.userType === "vendor" || formData.userType === "mechanic";
 
+  // ✅ FIXED: Updated business types to match backend expectations
   const businessTypes = [
-    { value: "gas_services", label: "Gas Services & Delivery" },
-    { value: "auto_repair", label: "Auto Repair & Maintenance" },
-    { value: "roadside_assistance", label: "Roadside Assistance" },
-    { value: "tire_services", label: "Tire Services" },
-    { value: "battery_services", label: "Battery Services" },
-    { value: "general_mechanic", label: "General Mechanic" },
-    { value: "other", label: "Other Services" },
+    { value: "gas_station", label: "Gas Services & Delivery" }, // ✅ FIXED: gas_station instead of gas_services
+    { value: "mechanic", label: "Auto Repair & Maintenance" }, // ✅ FIXED: mechanic instead of auto_repair
+    { value: "roadside_assistance", label: "Roadside Assistance" }, // ✅ FIXED: matches backend
+    { value: "mechanic", label: "Tire Services" }, // ✅ FIXED: mechanic instead of tire_services
+    { value: "mechanic", label: "Battery Services" }, // ✅ FIXED: mechanic instead of battery_services
+    { value: "mechanic", label: "General Mechanic" }, // ✅ FIXED: matches backend
+    { value: "mechanic", label: "Other Services" }, // ✅ FIXED: mechanic instead of other
   ];
 
   const handleRegister = async (e: React.FormEvent) => {
@@ -137,8 +138,8 @@ const Register = () => {
       if (isVendorType) {
         registrationData.vendor_data = {
           business_name: formData.businessName,
-          business_type: formData.businessType,
-          description: formData.businessDescription || `Professional ${formData.businessType.replace('_', ' ')} services`,
+          business_type: formData.businessType, // ✅ FIXED: Now sends correct backend values
+          description: formData.businessDescription || `Professional ${getBusinessTypeLabel(formData.businessType)} services`,
           address: formData.businessAddress,
           city: formData.businessCity,
           country: formData.businessCountry,
@@ -197,10 +198,26 @@ const Register = () => {
           } else if (fieldErrors.password) {
             toast.error(`Password: ${fieldErrors.password[0]}`);
           } else if (fieldErrors.vendor_data) {
+            // ✅ FIXED: Better handling of nested vendor_data errors
             if (typeof fieldErrors.vendor_data === 'string') {
               toast.error(fieldErrors.vendor_data);
             } else if (Array.isArray(fieldErrors.vendor_data)) {
-              toast.error(`Vendor data: ${fieldErrors.vendor_data[0]}`);
+              // Handle array of vendor_data errors
+              fieldErrors.vendor_data.forEach((errorMsg: string) => {
+                toast.error(`Vendor data: ${errorMsg}`);
+              });
+            } else if (typeof fieldErrors.vendor_data === 'object') {
+              // Handle nested vendor_data field errors (e.g., vendor_data.business_type)
+              Object.keys(fieldErrors.vendor_data).forEach(field => {
+                const fieldError = fieldErrors.vendor_data[field];
+                if (Array.isArray(fieldError)) {
+                  fieldError.forEach((errorMsg: string) => {
+                    toast.error(`${field}: ${errorMsg}`);
+                  });
+                } else {
+                  toast.error(`${field}: ${fieldError}`);
+                }
+              });
             } else {
               toast.error("Please check your business information");
             }
@@ -255,6 +272,16 @@ const Register = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // ✅ FIXED: Helper function to get business type label for description
+  const getBusinessTypeLabel = (businessType: string): string => {
+    const businessTypeMap: Record<string, string> = {
+      'gas_station': 'gas services',
+      'mechanic': 'mechanic',
+      'roadside_assistance': 'roadside assistance'
+    };
+    return businessTypeMap[businessType] || 'services';
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -511,6 +538,9 @@ const Register = () => {
                 </option>
               ))}
             </select>
+            <p className="text-xs text-muted-foreground">
+              Select the category that best describes your business
+            </p>
           </div>
 
           <div className="space-y-2">
