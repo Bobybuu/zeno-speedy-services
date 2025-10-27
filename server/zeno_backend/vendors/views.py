@@ -500,25 +500,10 @@ class PayoutTransactionViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         return PayoutTransaction.objects.filter(vendor__user=self.request.user)
 
-# ========== EXISTING VIEWSETS (UPDATED WITH NEW IMPORTS) ==========
-
-class VendorReviewViewSet(viewsets.ModelViewSet):
-    queryset = VendorReview.objects.all().select_related('customer', 'vendor')
-    serializer_class = VendorReviewSerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
-    
-    def perform_create(self, serializer):
-        serializer.save(customer=self.request.user)
-
-    @action(detail=True, methods=['get'])
-    def vendor_reviews(self, request, pk=None):
-        """Get reviews for a specific vendor"""
-        vendor_reviews = VendorReview.objects.filter(vendor_id=pk)
-        serializer = self.get_serializer(vendor_reviews, many=True)
-        return Response(serializer.data)
+# ========== FIXED GasProductViewSet ==========
 
 class GasProductViewSet(viewsets.ModelViewSet):
-    """Fixed GasProductViewSet with proper error handling"""
+    """Fixed GasProductViewSet with consistent response structure"""
     queryset = GasProduct.objects.filter(is_active=True, is_available=True)
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['gas_type', 'cylinder_size', 'vendor', 'is_available', 'featured']
@@ -527,26 +512,51 @@ class GasProductViewSet(viewsets.ModelViewSet):
     ordering = ['-featured', 'name']
     
     def get_queryset(self):
-        """Safe queryset method that won't cause 500 errors"""
+        """Enhanced queryset with better error handling"""
         try:
             queryset = GasProduct.objects.filter(
                 is_active=True, 
                 is_available=True
-            )
+            ).select_related('vendor').prefetch_related('images')
             
+            # Apply filters safely
             vendor_verified = self.request.query_params.get('vendor__is_verified')
             if vendor_verified and vendor_verified.lower() == 'true':
                 queryset = queryset.filter(vendor__is_verified=True)
             
-            if self.action in ['my_products']:
-                if self.request.user.is_authenticated:
-                    queryset = queryset.filter(vendor__user=self.request.user)
+            # Location-based filtering
+            lat = self.request.query_params.get('lat')
+            lng = self.request.query_params.get('lng')
+            radius = self.request.query_params.get('radius', 20)
+            
+            if lat and lng:
+                try:
+                    lat = float(lat)
+                    lng = float(lng)
+                    radius = float(radius)
+                    
+                    # Simple bounding box filter
+                    lat_delta = radius / 111.0
+                    lng_delta = radius / (111.0 * abs(lat))
+                    
+                    queryset = queryset.filter(
+                        vendor__latitude__range=(lat - lat_delta, lat + lat_delta),
+                        vendor__longitude__range=(lng - lng_delta, lng + lng_delta)
+                    )
+                except (ValueError, TypeError) as e:
+                    print(f"Location filter error: {e}")
+                    # Continue without location filter
             
             return queryset
             
         except Exception as e:
             print(f"ERROR in GasProductViewSet.get_queryset: {e}")
-            return GasProduct.objects.filter(is_active=True, is_available=True)[:10]
+            # Return a safe fallback queryset
+            return GasProduct.objects.filter(
+                is_active=True, 
+                is_available=True,
+                vendor__is_verified=True
+            )[:20].select_related('vendor')
     
     def get_serializer_class(self):
         if self.action == 'create':
@@ -563,6 +573,57 @@ class GasProductViewSet(viewsets.ModelViewSet):
         if self.action in ['create', 'update', 'partial_update', 'destroy', 'update_stock', 'my_products']:
             return [permissions.IsAuthenticated(), IsVendorOwner()]
         return [permissions.AllowAny()]
+
+    def list(self, request, *args, **kwargs):
+        """Override list to ensure consistent response structure"""
+        try:
+            queryset = self.filter_queryset(self.get_queryset())
+            
+            # Debug logging
+            print(f"📦 Products queryset count: {queryset.count()}")
+            print(f"🔍 Applied filters: {request.query_params}")
+            
+            page = self.paginate_queryset(queryset)
+            if page is not None:
+                serializer = self.get_serializer(page, many=True)
+                response = self.get_paginated_response(serializer.data)
+                # Add debug info to response
+                response.data['debug'] = {
+                    'total_products': queryset.count(),
+                    'filters_applied': dict(request.query_params),
+                    'response_structure': 'paginated'
+                }
+                return response
+            
+            serializer = self.get_serializer(queryset, many=True)
+            
+            # Return consistent structure - always include count and results
+            response_data = {
+                'count': len(serializer.data),
+                'results': serializer.data,
+                'debug': {
+                    'total_products': queryset.count(),
+                    'filters_applied': dict(request.query_params),
+                    'response_structure': 'non_paginated'
+                }
+            }
+            return Response(response_data)
+            
+        except Exception as e:
+            print(f"❌ Error in GasProductViewSet.list: {e}")
+            import traceback
+            traceback.print_exc()
+            
+            # Fallback response
+            return Response({
+                'count': 0,
+                'results': [],
+                'error': str(e),
+                'debug': {
+                    'error_location': 'list_method',
+                    'message': 'Using fallback response'
+                }
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def perform_create(self, serializer):
         vendor = get_object_or_404(Vendor, user=self.request.user)
@@ -673,6 +734,23 @@ class GasProductViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+# ========== EXISTING VIEWSETS ==========
+
+class VendorReviewViewSet(viewsets.ModelViewSet):
+    queryset = VendorReview.objects.all().select_related('customer', 'vendor')
+    serializer_class = VendorReviewSerializer
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    
+    def perform_create(self, serializer):
+        serializer.save(customer=self.request.user)
+
+    @action(detail=True, methods=['get'])
+    def vendor_reviews(self, request, pk=None):
+        """Get reviews for a specific vendor"""
+        vendor_reviews = VendorReview.objects.filter(vendor_id=pk)
+        serializer = self.get_serializer(vendor_reviews, many=True)
+        return Response(serializer.data)
+
 class GasProductImageViewSet(viewsets.ModelViewSet):
     queryset = GasProductImage.objects.all()
     serializer_class = GasProductImageSerializer
@@ -709,7 +787,7 @@ class OperatingHoursViewSet(viewsets.ModelViewSet):
         vendor = get_object_or_404(Vendor, user=self.request.user)
         serializer.save(vendor=vendor)
 
-# Debug endpoint
+# Debug endpoints
 @api_view(['GET'])
 def debug_gas_products(request):
     """Debug endpoint to test gas products without filters"""
@@ -741,4 +819,73 @@ def debug_gas_products(request):
             'success': False,
             'error': str(e),
             'traceback': error_details
+        }, status=500)
+
+@api_view(['GET'])
+def debug_gas_products_detailed(request):
+    """Comprehensive debug endpoint for gas products"""
+    try:
+        # Get all query parameters
+        query_params = dict(request.query_params)
+        print(f"🔍 Debug endpoint called with params: {query_params}")
+        
+        # Test different querysets
+        all_products = GasProduct.objects.all()
+        active_products = GasProduct.objects.filter(is_active=True, is_available=True)
+        verified_products = GasProduct.objects.filter(
+            is_active=True, 
+            is_available=True,
+            vendor__is_verified=True
+        )
+        
+        # Apply location filter if provided
+        lat = request.GET.get('lat')
+        lng = request.GET.get('lng')
+        if lat and lng:
+            try:
+                lat = float(lat)
+                lng = float(lng)
+                verified_products = verified_products.filter(
+                    vendor__latitude__isnull=False,
+                    vendor__longitude__isnull=False
+                )
+            except ValueError:
+                pass
+        
+        # Get sample products
+        sample_products = verified_products[:10]
+        
+        # Build detailed response
+        response_data = {
+            'debug_info': {
+                'timestamp': timezone.now().isoformat(),
+                'query_params': query_params,
+                'database_counts': {
+                    'total_products': all_products.count(),
+                    'active_products': active_products.count(),
+                    'verified_products': verified_products.count(),
+                }
+            },
+            'sample_products': GasProductListSerializer(sample_products, many=True).data,
+            'database_check': {
+                'gas_products_table_exists': True,
+                'vendors_table_exists': True,
+            }
+        }
+        
+        return Response(response_data)
+        
+    except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"❌ DEBUG ERROR: {error_details}")
+        
+        return Response({
+            'success': False,
+            'error': str(e),
+            'traceback': error_details,
+            'debug_info': {
+                'timestamp': timezone.now().isoformat(),
+                'query_params': dict(request.query_params)
+            }
         }, status=500)
