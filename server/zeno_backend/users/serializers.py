@@ -3,9 +3,27 @@ from rest_framework import serializers
 from django.contrib.auth import authenticate
 from django.utils import timezone
 from .models import User
+from vendors.models import Vendor, VendorPayoutPreference, VendorPerformance
 from .otp_service import get_otp_service
 import phonenumbers
 from phonenumbers import NumberParseException
+
+class VendorRegistrationSerializer(serializers.ModelSerializer):
+    """Serializer for vendor-specific registration data"""
+    class Meta:
+        model = Vendor
+        fields = (
+            'business_name', 'business_type', 'description', 'address', 
+            'city', 'country', 'contact_number', 'email', 'website',
+            'delivery_radius_km', 'min_order_amount', 'delivery_fee'
+        )
+        extra_kwargs = {
+            'business_name': {'required': True},
+            'business_type': {'required': True},
+            'address': {'required': True},
+            'city': {'required': True},
+            'contact_number': {'required': True},
+        }
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=6)
@@ -16,12 +34,15 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         default='whatsapp',
         help_text="Preferred OTP delivery method: whatsapp, voice, or sms"
     )
+    
+    # Vendor-specific data (only required for vendor/mechanic registration)
+    vendor_data = VendorRegistrationSerializer(required=False)
 
     class Meta:
         model = User
         fields = ('id', 'email', 'username', 'password', 'password_confirm', 
                  'user_type', 'phone_number', 'location', 'first_name', 'last_name',
-                 'preferred_otp_channel')
+                 'preferred_otp_channel', 'vendor_data')
         extra_kwargs = {
             'phone_number': {'required': True},
             'username': {'required': False},
@@ -41,13 +62,28 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         if email and User.objects.filter(email=email).exists():
             raise serializers.ValidationError({"email": "A user with this email already exists."})
         
+        # Validate vendor data for vendor/mechanic registration
+        user_type = attrs.get('user_type')
+        vendor_data = attrs.get('vendor_data')
+        
+        if user_type in ['vendor', 'mechanic'] and not vendor_data:
+            raise serializers.ValidationError({
+                "vendor_data": "Vendor business information is required for vendor/mechanic registration."
+            })
+        
+        if user_type == 'customer' and vendor_data:
+            raise serializers.ValidationError({
+                "vendor_data": "Vendor data should not be provided for customer registration."
+            })
+        
         if not attrs.get('username') and phone_number:
             attrs['username'] = phone_number
         
         return attrs
 
     def create(self, validated_data):
-        # Extract preferred channel before creating user
+        # Extract vendor data before creating user
+        vendor_data = validated_data.pop('vendor_data', None)
         preferred_channel = validated_data.pop('preferred_otp_channel', 'whatsapp')
         validated_data.pop('password_confirm')
         
@@ -70,13 +106,58 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         user.preferred_otp_channel = preferred_channel
         user.save()
         
+        # Create vendor profile if user is vendor/mechanic
+        if user.user_type in ['vendor', 'mechanic'] and vendor_data:
+            self.create_vendor_profile(user, vendor_data)
+        
         # Generate and send OTP using preferred channel
-        #if user.phone_number:
-            #otp = user.generate_otp()
-            #otp_service = get_otp_service()
-            #otp_service.send_otp(user.phone_number, otp, preferred_channel)
+        # if user.phone_number:
+        #     otp = user.generate_otp()
+        #     otp_service = get_otp_service()
+        #     otp_service.send_otp(user.phone_number, otp, preferred_channel)
 
         return user
+
+    def create_vendor_profile(self, user, vendor_data):
+        """Create vendor profile with the provided data"""
+        try:
+            # Map business types from frontend to backend
+            business_type_mapping = {
+                'gas_services': 'gas_station',
+                'auto_repair': 'mechanic',
+                'roadside_assistance': 'roadside_assistance',
+                'tire_services': 'mechanic',
+                'battery_services': 'mechanic',
+                'general_mechanic': 'mechanic',
+                'other': 'mechanic'
+            }
+            
+            vendor_data['business_type'] = business_type_mapping.get(
+                vendor_data.get('business_type', 'other'), 
+                'mechanic'
+            )
+            
+            # Use phone number as contact number if not provided
+            if not vendor_data.get('contact_number'):
+                vendor_data['contact_number'] = user.phone_number
+            
+            # Create vendor profile
+            vendor = Vendor.objects.create(
+                user=user,
+                **vendor_data
+            )
+            
+            # Vendor profile is automatically created with default payout preference
+            # and performance records via the Vendor.save() method
+            
+            return vendor
+            
+        except Exception as e:
+            # If vendor creation fails, delete the user to maintain data consistency
+            user.delete()
+            raise serializers.ValidationError({
+                "vendor_data": f"Failed to create vendor profile: {str(e)}"
+            })
 
 class UserLoginSerializer(serializers.Serializer):
     phone_number = serializers.CharField()
@@ -138,13 +219,15 @@ class ResendOTPSerializer(serializers.Serializer):
 
 class UserProfileSerializer(serializers.ModelSerializer):
     preferred_otp_channel = serializers.CharField(source='get_preferred_otp_channel_display', read_only=True)
+    has_vendor_profile = serializers.BooleanField(read_only=True)
     
     class Meta:
         model = User
         fields = ('id', 'email', 'username', 'user_type', 'phone_number', 
                  'location', 'first_name', 'last_name', 'profile_picture', 
-                 'is_verified', 'phone_verified', 'date_joined', 'preferred_otp_channel')
-        read_only_fields = ('id', 'email', 'date_joined', 'preferred_otp_channel')
+                 'is_verified', 'phone_verified', 'date_joined', 'preferred_otp_channel',
+                 'has_vendor_profile')
+        read_only_fields = ('id', 'email', 'date_joined', 'preferred_otp_channel', 'has_vendor_profile')
 
 class UserUpdateSerializer(serializers.ModelSerializer):
     preferred_otp_channel = serializers.ChoiceField(

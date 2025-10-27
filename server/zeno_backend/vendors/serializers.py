@@ -10,6 +10,36 @@ from .models import (
 
 User = get_user_model()
 
+# ========== VENDOR REGISTRATION SERIALIZERS ==========
+
+class VendorSerializer(serializers.ModelSerializer):
+    """Main Vendor serializer for registration and profile management"""
+    business_type_display = serializers.CharField(source='get_business_type_display', read_only=True)
+    is_operational = serializers.BooleanField(read_only=True)
+    has_payout_preference = serializers.BooleanField(read_only=True)
+    
+    class Meta:
+        model = Vendor
+        fields = '__all__'
+        read_only_fields = ('user', 'average_rating', 'total_reviews', 'is_verified', 
+                           'total_earnings', 'available_balance', 'pending_payouts', 
+                           'total_paid_out', 'total_orders_count', 'completed_orders_count', 
+                           'active_customers_count', 'created_at', 'updated_at')
+
+class VendorProfileSerializer(serializers.ModelSerializer):
+    """Serializer for vendor profile with user data"""
+    user = serializers.SerializerMethodField()
+    business_type_display = serializers.CharField(source='get_business_type_display', read_only=True)
+    is_operational = serializers.BooleanField(read_only=True)
+    
+    class Meta:
+        model = Vendor
+        fields = '__all__'
+    
+    def get_user(self, obj):
+        from users.serializers import UserProfileSerializer
+        return UserProfileSerializer(obj.user).data
+
 # ========== NEW DASHBOARD SERIALIZERS ==========
 
 class VendorPayoutPreferenceSerializer(serializers.ModelSerializer):
@@ -405,55 +435,6 @@ class VendorDashboardSerializer(serializers.ModelSerializer):
     
     def get_out_of_stock_products(self, obj):
         return obj.gas_products.filter(stock_quantity=0, is_active=True).count()
-
-class VendorSerializer(serializers.ModelSerializer):
-    operating_hours = OperatingHoursSerializer(many=True, read_only=True)
-    reviews = VendorReviewSerializer(many=True, read_only=True)
-    owner_name = serializers.CharField(source='user.get_full_name', read_only=True)
-    owner_email = serializers.CharField(source='user.email', read_only=True)
-    
-    # Gas products related fields
-    gas_products = GasProductListSerializer(many=True, read_only=True)
-    total_gas_products = serializers.SerializerMethodField()
-    available_gas_products = serializers.SerializerMethodField()
-    
-    # New dashboard fields
-    payout_preference = VendorPayoutPreferenceSerializer(read_only=True)
-    performance = VendorPerformanceSerializer(read_only=True)
-    has_payout_preference = serializers.BooleanField(read_only=True)
-    
-    class Meta:
-        model = Vendor
-        fields = [
-            'id', 'user', 'owner_name', 'owner_email', 'business_name', 'business_type',
-            'description', 'latitude', 'longitude', 'address', 'city', 'country',
-            'contact_number', 'email', 'website', 'opening_hours', 'is_verified',
-            'is_active', 'average_rating', 'total_reviews', 'operating_hours',
-            'reviews', 'delivery_radius_km', 'min_order_amount', 'delivery_fee',
-            'gas_products', 'total_gas_products', 'available_gas_products',
-            
-            # New dashboard fields
-            'commission_rate', 'total_earnings', 'available_balance', 
-            'pending_payouts', 'total_paid_out', 'total_orders_count',
-            'completed_orders_count', 'active_customers_count',
-            'payout_preference', 'performance', 'has_payout_preference',
-            'dashboard_layout', 'notification_preferences',
-            
-            'created_at'
-        ]
-        read_only_fields = [
-            'user', 'average_rating', 'total_reviews', 'is_verified',
-            'total_gas_products', 'available_gas_products',
-            'total_earnings', 'available_balance', 'pending_payouts', 
-            'total_paid_out', 'total_orders_count', 'completed_orders_count',
-            'active_customers_count', 'has_payout_preference'
-        ]
-    
-    def get_total_gas_products(self, obj):
-        return obj.gas_products.count()
-    
-    def get_available_gas_products(self, obj):
-        return obj.gas_products.filter(stock_quantity__gt=0, is_active=True).count()
 
 class VendorCreateSerializer(serializers.ModelSerializer):
     class Meta:

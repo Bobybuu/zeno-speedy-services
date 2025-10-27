@@ -67,5 +67,19 @@ class User(AbstractUser):
         """Get human-readable preferred OTP channel"""
         return dict(self.OTP_CHOICES).get(self.preferred_otp_channel, 'WhatsApp')
 
+    def has_vendor_profile(self):
+        """Check if user has a vendor profile"""
+        try:
+            return hasattr(self, 'vendor_profile') and self.vendor_profile is not None
+        except Exception:
+            return False
+
+    def get_vendor_profile(self):
+        """Get vendor profile if exists"""
+        try:
+            return self.vendor_profile
+        except Exception:
+            return None
+
     class Meta:
         db_table = 'users'

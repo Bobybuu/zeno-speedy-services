@@ -59,7 +59,7 @@ class RegisterView(APIView):
             
             refresh = RefreshToken.for_user(user)
             
-            return Response({
+            response_data = {
                 'user': UserProfileSerializer(user).data,
                 'refresh': str(refresh),
                 'access': str(refresh.access_token),
@@ -67,7 +67,25 @@ class RegisterView(APIView):
                 'requires_otp_verification': False,
                 'remaining_otp_attempts': remaining_attempts if user.phone_number else None,
                 'preferred_channel_used': user.preferred_otp_channel
-            }, status=status.HTTP_201_CREATED)
+            }
+            
+            # Add vendor-specific data to response if applicable
+            if user.user_type in ['vendor', 'mechanic'] and user.has_vendor_profile():
+                try:
+                    from vendors.serializers import VendorSerializer
+                    vendor_profile = user.get_vendor_profile()
+                    response_data['vendor_profile'] = VendorSerializer(vendor_profile).data
+                    response_data['redirectPath'] = '/vendor/dashboard'  # Vendor dashboard redirect
+                    response_data['message'] = 'Vendor account created successfully! Setting up your dashboard...'
+                except ImportError:
+                    # Fallback if vendors serializers not available
+                    response_data['redirectPath'] = '/vendor/dashboard'
+                    response_data['message'] = 'Vendor account created successfully! Setting up your dashboard...'
+            else:
+                response_data['redirectPath'] = '/dashboard'  # Customer dashboard
+                response_data['message'] = 'Account created successfully! Welcome to Zeno Services.'
+            
+            return Response(response_data, status=status.HTTP_201_CREATED)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -80,12 +98,26 @@ class LoginView(APIView):
             user = serializer.validated_data['user']
             refresh = RefreshToken.for_user(user)
             
-            return Response({
+            response_data = {
                 'user': UserProfileSerializer(user).data,
                 'refresh': str(refresh),
                 'access': str(refresh.access_token),
                 'message': 'Login successful'
-            })
+            }
+            
+            # Add vendor profile data if user is vendor/mechanic
+            if user.user_type in ['vendor', 'mechanic'] and user.has_vendor_profile():
+                try:
+                    from vendors.serializers import VendorSerializer
+                    vendor_profile = user.get_vendor_profile()
+                    response_data['vendor_profile'] = VendorSerializer(vendor_profile).data
+                    response_data['redirectPath'] = '/vendor/dashboard'
+                except ImportError:
+                    response_data['redirectPath'] = '/vendor/dashboard'
+            else:
+                response_data['redirectPath'] = '/dashboard'
+            
+            return Response(response_data)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -98,12 +130,26 @@ class VerifyOTPView(APIView):
             user = serializer.validated_data['user']
             refresh = RefreshToken.for_user(user)
             
-            return Response({
+            response_data = {
                 'user': UserProfileSerializer(user).data,
                 'refresh': str(refresh),
                 'access': str(refresh.access_token),
                 'message': 'Phone number verified successfully'
-            })
+            }
+            
+            # Add vendor profile data if user is vendor/mechanic
+            if user.user_type in ['vendor', 'mechanic'] and user.has_vendor_profile():
+                try:
+                    from vendors.serializers import VendorSerializer
+                    vendor_profile = user.get_vendor_profile()
+                    response_data['vendor_profile'] = VendorSerializer(vendor_profile).data
+                    response_data['redirectPath'] = '/vendor/dashboard'
+                except ImportError:
+                    response_data['redirectPath'] = '/vendor/dashboard'
+            else:
+                response_data['redirectPath'] = '/dashboard'
+            
+            return Response(response_data)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -247,10 +293,21 @@ class CheckAuthView(APIView):
     def get(self, request):
         """Check if user is authenticated and return user data"""
         serializer = UserProfileSerializer(request.user)
-        return Response({
+        response_data = {
             'authenticated': True,
             'user': serializer.data
-        })
+        }
+        
+        # Add vendor profile data if user is vendor/mechanic
+        if request.user.user_type in ['vendor', 'mechanic'] and request.user.has_vendor_profile():
+            try:
+                from vendors.serializers import VendorSerializer
+                vendor_profile = request.user.get_vendor_profile()
+                response_data['vendor_profile'] = VendorSerializer(vendor_profile).data
+            except ImportError:
+                pass
+        
+        return Response(response_data)
 
 class LogoutView(APIView):
     permission_classes = [permissions.IsAuthenticated]
