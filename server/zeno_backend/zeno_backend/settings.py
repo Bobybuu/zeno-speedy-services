@@ -91,16 +91,7 @@ DATABASES = {
     }
 }
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'zeno_roadside',
-        'USER': 'postgres',
-        'PASSWORD': 'Chrispine9909',
-        'HOST': 'localhost',
-        'PORT': '5432',
-    }
-}
+
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [

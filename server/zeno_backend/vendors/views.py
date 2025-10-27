@@ -56,6 +56,7 @@ class VendorViewSet(viewsets.ModelViewSet):
     search_fields = ['business_name', 'city', 'address', 'description']
     ordering_fields = ['average_rating', 'created_at', 'business_name']
     ordering = ['-average_rating']
+    lookup_field = 'id' 
     
     def get_serializer_class(self):
         if self.action == 'create':
