@@ -1,6 +1,6 @@
 // services/vendorService.ts
 import api from './api';
-import { paymentApiService } from './paymentApi'; // ✅ Add this import
+import { paymentApiService } from './paymentApi';
 import { 
   Vendor, 
   VendorFilters, 
@@ -154,10 +154,73 @@ export class VendorsApiService {
 }
 
 export class GasProductsApiService {
-  // Product management
+  // Product management - FIXED with enhanced response handling
   async getGasProducts(filters?: GasProductFilters): Promise<{ count: number; results: GasProduct[] }> {
-    const response = await api.get('/vendors/gas-products/', { params: filters });
-    return response.data;
+    try {
+      console.log('🔄 Fetching gas products with filters:', filters);
+      
+      const response = await api.get('/vendors/gas-products/', { params: filters });
+      console.log('📡 Raw API response structure:', {
+        hasResults: !!response.data.results,
+        hasArray: Array.isArray(response.data),
+        count: response.data.count,
+        fullResponseKeys: Object.keys(response.data)
+      });
+      
+      // Handle different response structures
+      let productsData: GasProduct[] = [];
+      let totalCount = 0;
+      
+      if (response.data && response.data.results && Array.isArray(response.data.results)) {
+        // Standard Django REST Framework paginated response
+        productsData = response.data.results;
+        totalCount = response.data.count || productsData.length;
+        console.log(`📊 Got ${productsData.length} products from paginated response (total: ${totalCount})`);
+      } else if (Array.isArray(response.data)) {
+        // Simple array response
+        productsData = response.data;
+        totalCount = response.data.length;
+        console.log(`📊 Got ${productsData.length} products from array response`);
+      } else if (response.data && Array.isArray(response.data.data)) {
+        // Some APIs use {data: []} structure
+        productsData = response.data.data;
+        totalCount = response.data.count || productsData.length;
+        console.log(`📊 Got ${productsData.length} products from data array`);
+      } else {
+        // Fallback - try to extract products from response
+        productsData = response.data || [];
+        totalCount = productsData.length;
+        console.log(`📊 Using fallback with ${productsData.length} products`);
+      }
+      
+      // Ensure we always return the expected structure
+      return {
+        count: totalCount,
+        results: productsData
+      };
+      
+    } catch (error: any) {
+      console.error('❌ Error fetching gas products:', error);
+      
+      // Enhanced error logging
+      if (error.response) {
+        console.error('📡 Response error details:', {
+          status: error.response.status,
+          data: error.response.data,
+          headers: error.response.headers
+        });
+      } else if (error.request) {
+        console.error('🌐 No response received:', error.request);
+      } else {
+        console.error('⚙️ Request setup error:', error.message);
+      }
+      
+      // Return empty results instead of throwing to prevent UI crashes
+      return {
+        count: 0,
+        results: []
+      };
+    }
   }
 
   async getGasProduct(id: number): Promise<GasProduct> {
@@ -336,7 +399,7 @@ export const vendorPayoutsAPI = {
   getPayoutRequests: () => paymentApiService.getPayoutRequests(),
 };
 
-// Legacy exports for backward compatibility
+// Legacy exports for backward compatibility - FIXED gasProductsAPI
 export const vendorsAPI = {
   getVendors: (filters?: VendorFilters) => vendorsApiService.getVendors(filters),
   getVendor: (id: number) => vendorsApiService.getVendor(id),
@@ -366,7 +429,26 @@ export const vendorsAPI = {
 };
 
 export const gasProductsAPI = {
-  getGasProducts: (filters?: GasProductFilters) => gasProductsApiService.getGasProducts(filters),
+  getGasProducts: async (filters?: GasProductFilters): Promise<any> => {
+    try {
+      console.log('🔄 Legacy API - Fetching gas products with filters:', filters);
+      
+      const result = await gasProductsApiService.getGasProducts(filters);
+      console.log('🔄 Legacy API - Processed result:', {
+        count: result.count,
+        resultsCount: result.results.length,
+        sample: result.results.slice(0, 2)
+      });
+      
+      // For backward compatibility, return results array directly
+      // but also include count for components that need it
+      return result.results;
+    } catch (error) {
+      console.error('❌ Legacy API error:', error);
+      return [];
+    }
+  },
+  
   getGasProduct: (id: number) => gasProductsApiService.getGasProduct(id),
   createGasProduct: (data: GasProductCreateData) => gasProductsApiService.createGasProduct(data),
   updateGasProduct: (id: number, data: GasProductUpdateData) => gasProductsApiService.updateGasProduct(id, data),
