@@ -21,15 +21,17 @@ interface RegisterResponse {
     requires_otp_verification: boolean;
     remaining_otp_attempts?: number;
     preferred_channel_used: string;
+    vendor_profile?: any;
+    redirectPath?: string;
   };
   error?: {
     code: string;
     message: string;
     details?: any;
-    field_errors?: Record<string, string[]>; // ✅ FIXED: Add field_errors property
+    field_errors?: Record<string, string[]>;
   };
   message?: string;
-  redirectPath?: string; // ✅ FIXED: Add redirectPath property
+  redirectPath?: string;
 }
 
 const Register = () => {
@@ -104,6 +106,10 @@ const Register = () => {
         toast.error("Business address is required for vendors");
         return;
       }
+      if (!formData.businessCity.trim()) {
+        toast.error("Business city is required for vendors");
+        return;
+      }
       if (!formData.contactNumber.trim()) {
         toast.error("Contact number is required for vendors");
         return;
@@ -113,17 +119,18 @@ const Register = () => {
     setIsLoading(true);
 
     try {
+      // Prepare registration data according to backend expectations
       const registrationData: any = {
-        email: formData.businessEmail || "",
-        username: formData.phoneNumber,
+        email: formData.businessEmail || `${formData.phoneNumber}@zenoservices.com`, // Provide fallback email
+        username: formData.phoneNumber, // Use phone as username
         password: formData.password,
         password_confirm: formData.confirmPassword,
         user_type: formData.userType,
         phone_number: formData.phoneNumber,
-        location: formData.businessCity || "",
+        location: formData.businessCity || "Nairobi", // Provide default location
         first_name: formData.firstName,
         last_name: formData.lastName,
-        preferred_otp_channel: "sms"
+        preferred_otp_channel: "whatsapp" // Default to whatsapp for better UX
       };
 
       // Add vendor-specific data if registering as vendor/mechanic
@@ -131,73 +138,119 @@ const Register = () => {
         registrationData.vendor_data = {
           business_name: formData.businessName,
           business_type: formData.businessType,
-          description: formData.businessDescription,
+          description: formData.businessDescription || `Professional ${formData.businessType.replace('_', ' ')} services`,
           address: formData.businessAddress,
           city: formData.businessCity,
           country: formData.businessCountry,
           contact_number: formData.contactNumber || formData.phoneNumber,
-          email: formData.businessEmail,
-          website: formData.businessWebsite,
+          email: formData.businessEmail || `${formData.phoneNumber}@zenoservices.com`,
+          website: formData.businessWebsite || "",
           delivery_radius_km: parseInt(formData.deliveryRadius) || 10,
           min_order_amount: parseFloat(formData.minOrderAmount) || 0,
           delivery_fee: parseFloat(formData.deliveryFee) || 0,
         };
       }
 
-      const result = await register(registrationData) as RegisterResponse; // ✅ FIXED: Cast to local type
+      console.log("Registration data being sent:", registrationData);
+
+      const result = await register(registrationData) as RegisterResponse;
       
       if (result.success) {
-        toast.success(
-          isVendorType 
-            ? "Vendor account created successfully! Setting up your dashboard..." 
-            : "Account created successfully! Welcome to Zeno Services."
-        );
+        const successMessage = isVendorType 
+          ? "Vendor account created successfully! Setting up your dashboard..." 
+          : "Account created successfully! Welcome to Zeno Services.";
         
-        // ✅ FIXED: Use navigate from the component (which is inside Router)
-        const redirectPath = result.redirectPath || '/dashboard';
-        navigate(redirectPath);
-      } else {
-        // ✅ FIXED: Use field_errors instead of direct properties on error
-        const fieldErrors = result.error?.field_errors;
+        toast.success(successMessage);
         
-        if (fieldErrors?.phone_number) {
-          toast.error(fieldErrors.phone_number[0]);
-        } else if (fieldErrors?.username) {
-          toast.error(fieldErrors.username[0]);
-        } else if (fieldErrors?.password) {
-          toast.error(fieldErrors.password[0]);
-        } else if (fieldErrors?.vendor_data) {
-          toast.error("Vendor registration failed. Please check your business information.");
+        // Determine redirect path
+        let redirectPath = '/dashboard';
+        if (result.redirectPath) {
+          redirectPath = result.redirectPath;
+        } else if (isVendorType) {
+          redirectPath = '/vendor/dashboard';
         } else {
-          toast.error(result.error?.message || "Registration failed");
+          redirectPath = '/dashboard';
+        }
+
+        console.log("Registration successful, redirecting to:", redirectPath);
+        
+        // Small delay to show success message before redirect
+        setTimeout(() => {
+          navigate(redirectPath, { replace: true });
+        }, 1500);
+        
+      } else {
+        // Handle different error types
+        const error = result.error;
+        console.error("Registration error details:", error);
+        
+        if (error?.field_errors) {
+          // Handle field-specific errors
+          const fieldErrors = error.field_errors;
+          
+          if (fieldErrors.phone_number) {
+            toast.error(`Phone number: ${fieldErrors.phone_number[0]}`);
+          } else if (fieldErrors.email) {
+            toast.error(`Email: ${fieldErrors.email[0]}`);
+          } else if (fieldErrors.username) {
+            toast.error(`Username: ${fieldErrors.username[0]}`);
+          } else if (fieldErrors.password) {
+            toast.error(`Password: ${fieldErrors.password[0]}`);
+          } else if (fieldErrors.vendor_data) {
+            if (typeof fieldErrors.vendor_data === 'string') {
+              toast.error(fieldErrors.vendor_data);
+            } else if (Array.isArray(fieldErrors.vendor_data)) {
+              toast.error(`Vendor data: ${fieldErrors.vendor_data[0]}`);
+            } else {
+              toast.error("Please check your business information");
+            }
+          } else {
+            // Show first field error found
+            const firstErrorKey = Object.keys(fieldErrors)[0];
+            const firstError = fieldErrors[firstErrorKey];
+            if (Array.isArray(firstError)) {
+              toast.error(`${firstErrorKey}: ${firstError[0]}`);
+            } else {
+              toast.error(String(firstError));
+            }
+          }
+        } else if (error?.message) {
+          // Handle general error message
+          toast.error(error.message);
+        } else {
+          toast.error("Registration failed. Please try again.");
         }
       }
     } catch (error: any) {
-      console.error("Registration error:", error);
+      console.error("Registration catch error:", error);
       
-      // ✅ FIXED: Handle different error formats
+      // Handle network errors or unexpected errors
       if (error.response?.data) {
         const errorData = error.response.data;
         
-        // Handle field errors from API response
         if (errorData.field_errors) {
           const fieldErrors = errorData.field_errors;
-          if (fieldErrors.phone_number) {
-            toast.error(fieldErrors.phone_number[0]);
-          } else if (fieldErrors.username) {
-            toast.error(fieldErrors.username[0]);
-          } else if (fieldErrors.password) {
-            toast.error(fieldErrors.password[0]);
+          const firstErrorKey = Object.keys(fieldErrors)[0];
+          const firstError = fieldErrors[firstErrorKey];
+          
+          if (Array.isArray(firstError)) {
+            toast.error(`${firstErrorKey}: ${firstError[0]}`);
           } else {
-            toast.error(errorData.message || "Registration failed");
+            toast.error(String(firstError));
           }
+        } else if (errorData.message) {
+          toast.error(errorData.message);
+        } else if (errorData.detail) {
+          toast.error(errorData.detail);
         } else {
-          toast.error(errorData.message || errorData.detail || "Registration failed");
+          toast.error("Registration failed. Please check your information.");
         }
       } else if (error.message) {
         toast.error(error.message);
+      } else if (error.code === 'NETWORK_ERROR') {
+        toast.error("Network error. Please check your connection and try again.");
       } else {
-        toast.error("An unexpected error occurred");
+        toast.error("An unexpected error occurred. Please try again.");
       }
     } finally {
       setIsLoading(false);
@@ -205,19 +258,52 @@ const Register = () => {
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
+    const { name, value } = e.target;
+    
+    setFormData(prev => ({
+      ...prev,
+      [name]: value,
+    }));
+
+    // Auto-fill contact number with phone number for vendors if contact number is empty
+    if (name === 'phoneNumber' && isVendorType && !formData.contactNumber) {
+      setFormData(prev => ({
+        ...prev,
+        contactNumber: value
+      }));
+    }
+
+    // Auto-fill business city with location if empty
+    if (name === 'businessCity' && !formData.businessCity) {
+      setFormData(prev => ({
+        ...prev,
+        businessCity: value
+      }));
+    }
   };
 
   const nextStep = () => {
     // Validate step 1 before proceeding
     if (currentStep === 1) {
-      if (!formData.firstName.trim() || !formData.lastName.trim() || !formData.phoneNumber.trim()) {
-        toast.error("Please fill in all required personal information");
+      if (!formData.firstName.trim()) {
+        toast.error("First name is required");
         return;
       }
+      if (!formData.lastName.trim()) {
+        toast.error("Last name is required");
+        return;
+      }
+      if (!formData.phoneNumber.trim()) {
+        toast.error("Phone number is required");
+        return;
+      }
+      
+      const phoneRegex = /^\+?[\d\s-()]{10,}$/;
+      if (!phoneRegex.test(formData.phoneNumber)) {
+        toast.error("Please enter a valid phone number");
+        return;
+      }
+      
       if (formData.password.length < 6) {
         toast.error("Password must be at least 6 characters");
         return;
@@ -495,6 +581,9 @@ const Register = () => {
                 required
               />
             </div>
+            <p className="text-xs text-muted-foreground">
+              This will be displayed to customers for business inquiries
+            </p>
           </div>
 
           <div className="space-y-2">

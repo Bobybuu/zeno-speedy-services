@@ -2,23 +2,147 @@
 import React, { createContext, useState, useContext, useEffect, ReactNode } from 'react';
 import { authApiService } from '@/services/api';
 import { vendorsApiService } from '@/services/vendorService';
-import { User, VendorProfile, AuthContextType, LoginData, RegisterData } from '@/types';
+import { 
+  User, 
+  VendorProfile, 
+  AuthContextType, 
+  LoginData, 
+  RegisterData
+} from '@/types';
 
-// Define local result types to fix TypeScript errors
-interface LocalLoginResult {
+// Define the missing types locally since they're not exported from '@/types'
+export interface VendorRegistrationData {
+  business_name: string;
+  business_type: string;
+  description?: string;
+  address: string;
+  city: string;
+  country: string;
+  contact_number: string;
+  email?: string;
+  website?: string;
+  delivery_radius_km?: number;
+  min_order_amount?: number;
+  delivery_fee?: number;
+}
+
+export interface ExtendedRegisterData extends RegisterData {
+  vendor_data?: VendorRegistrationData;
+  user_type: 'customer' | 'vendor' | 'mechanic';
+}
+
+export interface EnhancedLoginResult {
   success: boolean;
-  data?: any;
-  error?: any;
+  data?: {
+    user: User;
+    refresh: string;
+    access: string;
+    message: string;
+    vendor_profile?: VendorProfile;
+    redirectPath?: string;
+  };
+  error?: {
+    code: string;
+    message: string;
+    details?: any;
+    field_errors?: Record<string, string[]>;
+  };
+}
+
+export interface RegistrationResponse {
+  success: boolean;
+  data?: {
+    user: User;
+    refresh: string;
+    access: string;
+    message: string;
+    requires_otp_verification: boolean;
+    remaining_otp_attempts?: number;
+    preferred_channel_used: string;
+    vendor_profile?: VendorProfile;
+    redirectPath?: string;
+  };
+  error?: {
+    code: string;
+    message: string;
+    details?: any;
+    field_errors?: Record<string, string[]>;
+  };
   redirectPath?: string;
 }
 
-interface LocalRegisterResult {
-  success: boolean;
-  data?: any;
+// Define a flexible vendor data type that can handle both basic vendor and dashboard data
+interface VendorData {
+  // Basic vendor properties
+  id?: number;
+  user_id?: number;
+  business_name?: string;
+  business_type?: string;
+  description?: string;
+  address?: string;
+  city?: string;
+  country?: string;
+  contact_number?: string;
+  email?: string;
+  website?: string;
+  is_verified?: boolean;
+  is_active?: boolean;
+  average_rating?: number;
+  total_reviews?: number;
+  delivery_radius_km?: number;
+  min_order_amount?: number;
+  delivery_fee?: number;
+  
+  // Extended financial properties (from dashboard)
+  commission_rate?: number;
+  total_earnings?: number;
+  available_balance?: number;
+  pending_payouts?: number;
+  total_paid_out?: number;
+  total_orders_count?: number;
+  completed_orders_count?: number;
+  active_customers_count?: number;
+  created_at?: string;
+  updated_at?: string;
+  
+  // Dashboard analytics specific properties
+  total_gas_products?: number;
+  available_gas_products?: number;
+  low_stock_products?: number;
+  out_of_stock_products?: number;
+  order_completion_rate?: number;
+  average_commission?: number;
+  has_payout_preference?: boolean;
+  payout_preference?: any;
+  recent_earnings?: any[];
+  recent_payouts?: any[];
+  next_payout_amount?: number;
+}
+
+// Define proper result types that match the AuthContextType interface
+interface VerifyOTPResult {
+  success: boolean; 
+  data?: {
+    user: User;
+    refresh: string;
+    access: string;
+    message: string;
+    vendor_profile?: VendorProfile;
+    redirectPath?: string;
+  }; 
   error?: any;
-  requiresOTP?: boolean;
-  preferredChannelUsed?: string;
-  redirectPath?: string;
+}
+
+interface UpdateOTPChannelResult {
+  success: boolean; 
+  data?: any; 
+  error?: any;
+}
+
+interface CreateVendorProfileResult {
+  success: boolean; 
+  data?: VendorProfile; 
+  error?: any;
 }
 
 interface LocalResendOTPResult {
@@ -99,50 +223,55 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     setVendorLoading(true);
     try {
-      // Try to get vendor dashboard data first (which should have VendorProfile data)
-      let vendorProfileData: any;
-      
+      let vendorData: VendorData = {};
+
       try {
-        vendorProfileData = await vendorsApiService.getVendorDashboard();
+        // Try to get vendor dashboard data first
+        const dashboardData = await vendorsApiService.getVendorDashboard();
+        vendorData = dashboardData as VendorData;
       } catch (dashboardError) {
         console.log('Vendor dashboard not available, falling back to basic vendor data');
         // If dashboard fails, get basic vendor data
-        const basicVendorData = await vendorsApiService.getMyVendor();
-        vendorProfileData = basicVendorData;
+        try {
+          const basicVendorData = await vendorsApiService.getMyVendor();
+          vendorData = basicVendorData as VendorData;
+        } catch (basicError) {
+          console.log('Basic vendor data also unavailable');
+          vendorData = {};
+        }
       }
 
-      // ✅ FIXED: Create VendorProfile without the 'user' property that doesn't exist in the type
+      // Create VendorProfile by safely extracting properties from vendorData
       const vendorProfile: VendorProfile = {
-        id: Number(vendorProfileData.id), // Ensure it's a number
-        user_id: currentUser?.id || vendorProfileData.user_id || vendorProfileData.user || 0,
-        // ✅ REMOVED: user: vendorProfileData.user, - This property doesn't exist in VendorProfile type
-        business_name: vendorProfileData.business_name,
-        business_type: vendorProfileData.business_type,
-        description: vendorProfileData.description || '',
-        address: vendorProfileData.address,
-        city: vendorProfileData.city,
-        country: vendorProfileData.country || 'Kenya',
-        contact_number: vendorProfileData.contact_number,
-        email: vendorProfileData.email || '',
-        is_verified: vendorProfileData.is_verified || false,
-        is_active: vendorProfileData.is_active !== false,
-        average_rating: vendorProfileData.average_rating || 0,
-        total_reviews: vendorProfileData.total_reviews || 0,
-        delivery_radius_km: vendorProfileData.delivery_radius_km || 10,
-        min_order_amount: vendorProfileData.min_order_amount || 0,
-        delivery_fee: vendorProfileData.delivery_fee || 0,
-        // Financial fields - use dashboard data if available, otherwise defaults
-        commission_rate: vendorProfileData.commission_rate || 0.1,
-        total_earnings: vendorProfileData.total_earnings || 0,
-        available_balance: vendorProfileData.available_balance || 0,
-        pending_payouts: vendorProfileData.pending_payouts || 0,
-        total_paid_out: vendorProfileData.total_paid_out || 0,
-        total_orders_count: vendorProfileData.total_orders_count || 0,
-        completed_orders_count: vendorProfileData.completed_orders_count || 0,
-        active_customers_count: vendorProfileData.active_customers_count || 0,
-        created_at: vendorProfileData.created_at || new Date().toISOString(),
-        updated_at: vendorProfileData.updated_at || new Date().toISOString(),
-        website: vendorProfileData.website || ''
+        id: Number(vendorData.id || 0),
+        user_id: currentUser?.id || vendorData.user_id || 0,
+        business_name: vendorData.business_name || '',
+        business_type: vendorData.business_type || 'mechanic',
+        description: vendorData.description || '',
+        address: vendorData.address || '',
+        city: vendorData.city || '',
+        country: vendorData.country || 'Kenya',
+        contact_number: vendorData.contact_number || '',
+        email: vendorData.email || '',
+        is_verified: vendorData.is_verified || false,
+        is_active: vendorData.is_active !== false,
+        average_rating: vendorData.average_rating || 0,
+        total_reviews: vendorData.total_reviews || 0,
+        delivery_radius_km: vendorData.delivery_radius_km || 10,
+        min_order_amount: vendorData.min_order_amount || 0,
+        delivery_fee: vendorData.delivery_fee || 0,
+        // Financial fields - use safe access with fallbacks
+        commission_rate: vendorData.commission_rate || 0.1,
+        total_earnings: vendorData.total_earnings || 0,
+        available_balance: vendorData.available_balance || 0,
+        pending_payouts: vendorData.pending_payouts || 0,
+        total_paid_out: vendorData.total_paid_out || 0,
+        total_orders_count: vendorData.total_orders_count || 0,
+        completed_orders_count: vendorData.completed_orders_count || 0,
+        active_customers_count: vendorData.active_customers_count || 0,
+        created_at: vendorData.created_at || new Date().toISOString(),
+        updated_at: vendorData.updated_at || new Date().toISOString(),
+        website: vendorData.website || ''
       };
       
       setVendorProfile(vendorProfile);
@@ -159,11 +288,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  const login = async (phone_number: string, password: string): Promise<LocalLoginResult> => {
+  const login = async (phone_number: string, password: string): Promise<EnhancedLoginResult> => {
     try {
       const response = await authApiService.login({ phone_number, password });
       if (response.data) {
-        const { user, access, refresh } = response.data;
+        const { user, access, refresh, vendor_profile, redirectPath } = response.data;
         
         localStorage.setItem('access_token', access);
         localStorage.setItem('refresh_token', refresh);
@@ -178,31 +307,55 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         
         return { 
           success: true, 
-          data: response.data,
-          redirectPath: getRedirectPath()
+          data: {
+            user,
+            refresh,
+            access,
+            message: 'Login successful',
+            vendor_profile,
+            redirectPath: redirectPath || getRedirectPath()
+          }
         };
       }
-      return { success: false, error: { message: 'No response data' } };
+      return { 
+        success: false, 
+        error: { 
+          code: 'NO_RESPONSE_DATA', 
+          message: 'No response data received from server' 
+        } 
+      };
     } catch (error: any) {
       console.error('Login error:', error);
       return { 
         success: false, 
-        error: error.response?.data || { message: 'Login failed' } 
+        error: error.response?.data || { 
+          code: 'LOGIN_FAILED', 
+          message: 'Login failed. Please check your credentials and try again.' 
+        } 
       };
     }
   };
 
-  const register = async (userData: RegisterData): Promise<LocalRegisterResult> => {
+  const register = async (userData: ExtendedRegisterData): Promise<RegistrationResponse> => {
     try {
       const response = await authApiService.register(userData);
       if (response.data) {
-        const { user, access, refresh, requires_otp_verification, preferred_channel_used } = response.data;
+        const { 
+          user, 
+          access, 
+          refresh, 
+          requires_otp_verification, 
+          preferred_channel_used,
+          vendor_profile,
+          redirectPath,
+          message 
+        } = response.data;
         
         localStorage.setItem('access_token', access);
         localStorage.setItem('refresh_token', refresh);
         localStorage.setItem('user', JSON.stringify(user));
         setCurrentUser(user);
-        setRequiresOTP(false);
+        setRequiresOTP(requires_otp_verification || false);
 
         if (user.user_type === 'vendor' || user.user_type === 'mechanic') {
           await fetchVendorProfile();
@@ -210,27 +363,43 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         
         return { 
           success: true, 
-          requiresOTP: false,
-          data: response.data,
-          preferredChannelUsed: preferred_channel_used,
-          redirectPath: getRedirectPath()
+          data: {
+            user,
+            refresh,
+            access,
+            message: message || 'Registration successful',
+            requires_otp_verification: requires_otp_verification || false,
+            preferred_channel_used: preferred_channel_used || 'whatsapp',
+            vendor_profile,
+            redirectPath: redirectPath || getRedirectPath()
+          },
+          redirectPath: redirectPath || getRedirectPath()
         };
       }
-      return { success: false, error: { message: 'No response data' } };
+      return { 
+        success: false, 
+        error: { 
+          code: 'NO_RESPONSE_DATA', 
+          message: 'No response data received from server' 
+        } 
+      };
     } catch (error: any) {
       console.error('Registration error:', error);
       return { 
         success: false, 
-        error: error.response?.data || { message: 'Registration failed' } 
+        error: error.response?.data || { 
+          code: 'REGISTRATION_FAILED', 
+          message: 'Registration failed. Please try again.' 
+        } 
       };
     }
   };
 
-  const verifyOTP = async (phone_number: string, otp: string) => {
+  const verifyOTP = async (phone_number: string, otp: string): Promise<VerifyOTPResult> => {
     try {
       const response = await authApiService.verifyOTP({ phone_number, otp });
       if (response.data) {
-        const { user, access, refresh } = response.data;
+        const { user, access, refresh, vendor_profile, redirectPath } = response.data;
         
         localStorage.removeItem('temp_access_token');
         localStorage.removeItem('temp_refresh_token');
@@ -247,14 +416,33 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           await fetchVendorProfile();
         }
         
-        return { success: true, data: response.data };
+        return { 
+          success: true, 
+          data: {
+            user,
+            refresh,
+            access,
+            message: 'OTP verified successfully',
+            vendor_profile,
+            redirectPath: redirectPath || getRedirectPath()
+          }
+        };
       }
-      return { success: false, error: { message: 'No response data' } };
+      return { 
+        success: false, 
+        error: { 
+          code: 'NO_RESPONSE_DATA', 
+          message: 'No response data received from server' 
+        } 
+      };
     } catch (error: any) {
       console.error('OTP verification error:', error);
       return { 
         success: false, 
-        error: error.response?.data || { message: 'OTP verification failed' } 
+        error: error.response?.data || { 
+          code: 'OTP_VERIFICATION_FAILED', 
+          message: 'OTP verification failed. Please check the code and try again.' 
+        } 
       };
     }
   };
@@ -276,12 +464,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       console.error('Resend OTP error:', error);
       return { 
         success: false, 
-        error: error.response?.data || { message: 'Failed to resend OTP' } 
+        error: error.response?.data || { 
+          code: 'RESEND_OTP_FAILED', 
+          message: 'Failed to resend OTP. Please try again.' 
+        } 
       };
     }
   };
 
-  const updateOTPChannel = async (preferred_channel: string) => {
+  const updateOTPChannel = async (preferred_channel: string): Promise<UpdateOTPChannelResult> => {
     try {
       const response = await authApiService.updateOTPChannel({ preferred_otp_channel: preferred_channel });
       if (response.data) {
@@ -294,14 +485,109 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           data: response.data 
         };
       }
-      return { success: false, error: { message: 'No response data' } };
+      return { 
+        success: false, 
+        error: { 
+          code: 'NO_RESPONSE_DATA', 
+          message: 'No response data received from server' 
+        } 
+      };
     } catch (error: any) {
       console.error('Update OTP channel error:', error);
       return { 
         success: false, 
-        error: error.response?.data || { message: 'Failed to update OTP channel' } 
+        error: error.response?.data || { 
+          code: 'UPDATE_OTP_CHANNEL_FAILED', 
+          message: 'Failed to update OTP channel. Please try again.' 
+        } 
       };
     }
+  };
+
+  const createVendorProfile = async (vendorData: VendorRegistrationData): Promise<CreateVendorProfileResult> => {
+    try {
+      if (!currentUser || (currentUser.user_type !== 'vendor' && currentUser.user_type !== 'mechanic')) {
+        return {
+          success: false,
+          error: {
+            code: 'INVALID_USER_TYPE',
+            message: 'Only vendor or mechanic users can create vendor profiles'
+          }
+        };
+      }
+
+      // Check if vendor profile already exists
+      if (vendorProfile) {
+        return {
+          success: false,
+          error: {
+            code: 'PROFILE_ALREADY_EXISTS',
+            message: 'Vendor profile already exists'
+          }
+        };
+      }
+
+      const response = await vendorsApiService.registerVendor(vendorData);
+      const vendorResponse = response as VendorData;
+      
+      // Create the vendor profile with safe property access
+      const newVendorProfile: VendorProfile = {
+        id: vendorResponse.id || 0,
+        user_id: currentUser.id,
+        business_name: vendorResponse.business_name || '',
+        business_type: vendorResponse.business_type || 'mechanic',
+        description: vendorResponse.description || '',
+        address: vendorResponse.address || '',
+        city: vendorResponse.city || '',
+        country: vendorResponse.country || 'Kenya',
+        contact_number: vendorResponse.contact_number || '',
+        email: vendorResponse.email || '',
+        website: vendorResponse.website || '',
+        is_verified: vendorResponse.is_verified || false,
+        is_active: vendorResponse.is_active !== false,
+        average_rating: vendorResponse.average_rating || 0,
+        total_reviews: vendorResponse.total_reviews || 0,
+        delivery_radius_km: vendorResponse.delivery_radius_km || 10,
+        min_order_amount: vendorResponse.min_order_amount || 0,
+        delivery_fee: vendorResponse.delivery_fee || 0,
+        commission_rate: vendorResponse.commission_rate || 0.1,
+        total_earnings: vendorResponse.total_earnings || 0,
+        available_balance: vendorResponse.available_balance || 0,
+        pending_payouts: vendorResponse.pending_payouts || 0,
+        total_paid_out: vendorResponse.total_paid_out || 0,
+        total_orders_count: vendorResponse.total_orders_count || 0,
+        completed_orders_count: vendorResponse.completed_orders_count || 0,
+        active_customers_count: vendorResponse.active_customers_count || 0,
+        created_at: vendorResponse.created_at || new Date().toISOString(),
+        updated_at: vendorResponse.updated_at || new Date().toISOString()
+      };
+
+      setVendorProfile(newVendorProfile);
+      localStorage.setItem('vendor_profile', JSON.stringify(newVendorProfile));
+
+      return {
+        success: true,
+        data: newVendorProfile
+      };
+    } catch (error: any) {
+      console.error('Create vendor profile error:', error);
+      return {
+        success: false,
+        error: error.response?.data || {
+          code: 'CREATE_VENDOR_PROFILE_FAILED',
+          message: 'Failed to create vendor profile. Please try again.'
+        }
+      };
+    }
+  };
+
+  const isVendorRegistrationComplete = (): boolean => {
+    return hasVendorProfile() && 
+           vendorProfile !== null && 
+           vendorProfile.business_name !== '' && 
+           vendorProfile.address !== '' && 
+           vendorProfile.city !== '' && 
+           vendorProfile.contact_number !== '';
   };
 
   const logout = async () => {
@@ -372,7 +658,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const getCartApiBaseUrl = (): string => {
-    return 'http://127.0.0.1:8000/api/orders/';
+    return 'https://api.zenoservices.co.ke/api/orders/';
   };
 
   const getCartItemsUrl = (cartId?: number): string => {
@@ -391,7 +677,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return `${baseUrl}cart/items/${itemId}/`;
   };
 
-  // ✅ FIXED: Update the AuthContextType to use local result types
+  // Fix the type casting for the context value
   const value: AuthContextType = {
     currentUser,
     vendorProfile,
@@ -399,14 +685,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     loading,
     vendorLoading,
     pendingUser,
-    login: login as any, // Cast to any to avoid type conflicts
-    register: register as any, // Cast to any to avoid type conflicts
-    verifyOTP,
-    resendOTP: resendOTP as any, // Cast to any to avoid type conflicts
+    login: login as any,
+    register: register as any,
+    verifyOTP: verifyOTP as any,
+    resendOTP: resendOTP as any,
     logout,
     checkAuthentication,
     updateUser,
-    updateOTPChannel,
+    updateOTPChannel: updateOTPChannel as any,
     fetchVendorProfile,
     isVendor,
     isMechanic,
@@ -417,6 +703,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     getCartApiBaseUrl,
     getCartItemsUrl,
     getCartItemUrl,
+    createVendorProfile: createVendorProfile as any,
+    isVendorRegistrationComplete
   };
 
   return (
