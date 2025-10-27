@@ -1,7 +1,7 @@
 // src/pages/Cart.tsx
 import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Trash2, Plus, Minus, ShoppingBag, Loader2, MapPin, Phone, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Trash2, Plus, Minus, ShoppingBag, Loader2, MapPin, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import BottomNav from "@/components/BottomNav";
 import { motion } from "framer-motion";
 import { useCart } from "@/context/CartContext";
+import { CartItem as BackendCartItem } from "@/types";
 
 // Updated interfaces to match your Django backend
 interface GasProduct {
@@ -31,41 +32,45 @@ interface GasProduct {
   description?: string;
 }
 
-interface CartItem {
+// Local cart item interface for the UI
+interface LocalCartItem {
   id: number;
-  item_type: string;
-  gas_product?: number;
-  product?: number;
-  product_id?: number;
+  name: string;
+  price: number;
   quantity: number;
-  unit_price: string | number;
-  total_price: string | number;
-  added_at: string;
-  item_name: string;
-  include_cylinder?: boolean;
-  gas_product_details?: any;
+  image?: string;
+  vendor_id: number;
+  vendor_name: string;
+  vendor_city: string;
+  gas_type?: string;
+  cylinder_size?: string;
+  price_with_cylinder?: number;
+  price_without_cylinder?: number;
+  stock_quantity?: number;
+  is_available?: boolean;
 }
 
 const Cart = () => {
   const navigate = useNavigate();
   const [isProcessing, setIsProcessing] = useState(false);
   
-  // ✅ Use CartContext
+  // ✅ Use CartContext with correct properties
   const { 
-    cart, 
-    loading, 
-    refreshCart, 
-    updateCartItem, 
-    removeFromCart, 
-    clearCart 
+    state, 
+    syncWithBackend, 
+    updateQuantity, 
+    removeItem, 
+    clearCart,
+    isOnline 
   } = useCart();
 
   // Debug logging
   useEffect(() => {
-    console.log('🔍 CART DEBUG - Full cart object:', cart);
-    console.log('🔍 CART DEBUG - Cart items:', cart?.items);
-    console.log('🔍 CART DEBUG - Loading state:', loading);
-  }, [cart, loading]);
+    console.log('🔍 CART DEBUG - Full cart state:', state);
+    console.log('🔍 CART DEBUG - Cart items:', state?.items);
+    console.log('🔍 CART DEBUG - Is syncing:', state?.isSyncing);
+    console.log('🔍 CART DEBUG - Is online:', isOnline);
+  }, [state, isOnline]);
 
   // Refresh cart on component mount
   useEffect(() => {
@@ -74,7 +79,7 @@ const Cart = () => {
     const loadCart = async () => {
       if (isMounted) {
         console.log('🔄 Loading cart on component mount');
-        await refreshCart();
+        await syncWithBackend();
       }
     };
     
@@ -164,82 +169,32 @@ const Cart = () => {
     };
   };
 
-  // ✅ IMPROVED: Robust gas product filtering with multiple detection methods
-  const gasProductItems: CartItem[] = useMemo(() => {
-    if (!cart?.items || !Array.isArray(cart.items)) {
+  // Convert backend cart items to local cart items for display
+  const localCartItems: LocalCartItem[] = useMemo(() => {
+    if (!state?.items || !Array.isArray(state.items)) {
       console.log('🔄 No cart items or items is not an array');
       return [];
     }
     
-    console.log('🔍 All cart items for filtering:', cart.items);
+    console.log('🔍 Converting backend cart items to local items:', state.items);
     
-    const filteredItems = cart.items.filter((item: CartItem) => {
-      // ✅ ROBUST FIX: Multiple criteria to detect gas products
-      const hasGasProductField = item.gas_product !== undefined && item.gas_product !== null;
-      const hasProductId = item.product_id !== undefined && item.product_id !== null;
-      const hasProductField = item.product !== undefined && item.product !== null;
-      const hasGasProductDetails = item.gas_product_details && Object.keys(item.gas_product_details).length > 0;
-      const hasGasInName = item.item_name && item.item_name.toLowerCase().includes('gas');
-      const hasCorrectItemType = item.item_type === 'gas_product';
-      
-      // ✅ Accept items that have ANY indication of being a gas product
-      const isGasProduct = 
-        hasCorrectItemType ||
-        hasGasProductField ||
-        hasProductId ||
-        hasProductField ||
-        hasGasProductDetails ||
-        hasGasInName;
-      
-      console.log(`🔄 Filtering item ${item.id}:`, { 
-        item_type: item.item_type,
-        gas_product: item.gas_product,
-        product_id: item.product_id,
-        product: item.product,
-        item_name: item.item_name,
-        gas_product_details: item.gas_product_details ? 'exists' : 'none',
-        hasGasProductField,
-        hasProductId,
-        hasProductField,
-        hasGasProductDetails,
-        hasGasInName,
-        hasCorrectItemType,
-        isGasProduct 
-      });
-      
-      return isGasProduct;
-    });
-    
-    console.log('✅ Filtered gas product items:', filteredItems);
-    console.log('📊 Total cart items:', cart.items.length);
-    console.log('📊 Filtered gas items:', filteredItems.length);
-    
-    return filteredItems;
-  }, [cart?.items]);
-
-  // ✅ ADDED: Debug the actual item structures
-  useEffect(() => {
-    if (gasProductItems.length > 0) {
-      console.log('🔍 DETAILED ITEM ANALYSIS:');
-      gasProductItems.forEach((item: CartItem, index: number) => {
-        console.log(`Item ${index} structure:`, {
-          id: item.id,
-          item_type: item.item_type,
-          gas_product: item.gas_product,
-          product_id: item.product_id,
-          product: item.product,
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-          total_price: item.total_price,
-          item_name: item.item_name,
-          include_cylinder: item.include_cylinder,
-          has_unit_price: item.unit_price !== undefined,
-          has_total_price: item.total_price !== undefined,
-          gas_product_details: item.gas_product_details ? Object.keys(item.gas_product_details) : 'none'
-        });
-      });
-    }
-  }, [gasProductItems]);
+    return state.items.map((item: LocalCartItem) => ({
+      id: item.id,
+      name: item.name,
+      price: item.price,
+      quantity: item.quantity,
+      image: item.image,
+      vendor_id: item.vendor_id,
+      vendor_name: item.vendor_name,
+      vendor_city: item.vendor_city,
+      gas_type: item.gas_type,
+      cylinder_size: item.cylinder_size,
+      price_with_cylinder: item.price_with_cylinder,
+      price_without_cylinder: item.price_without_cylinder,
+      stock_quantity: item.stock_quantity,
+      is_available: item.is_available
+    }));
+  }, [state?.items]);
 
   // Handle quantity update with error handling
   const handleUpdateQuantity = async (itemId: number, newQuantity: number) => {
@@ -247,12 +202,11 @@ const Cart = () => {
     
     setIsProcessing(true);
     try {
-      await updateCartItem(itemId, newQuantity);
+      updateQuantity(itemId, newQuantity);
       toast.success("Cart updated");
     } catch (error: any) {
       console.error('Error updating quantity:', error);
       toast.error("Failed to update quantity");
-      await refreshCart();
     } finally {
       setIsProcessing(false);
     }
@@ -262,12 +216,11 @@ const Cart = () => {
   const handleRemoveItem = async (itemId: number) => {
     setIsProcessing(true);
     try {
-      await removeFromCart(itemId);
+      removeItem(itemId);
       toast.success("Item removed from cart");
     } catch (error: any) {
       console.error('Error removing item:', error);
       toast.error("Failed to remove item");
-      await refreshCart();
     } finally {
       setIsProcessing(false);
     }
@@ -275,17 +228,16 @@ const Cart = () => {
 
   // Handle clear cart with confirmation
   const handleClearCart = async () => {
-    if (!gasProductItems.length) return;
+    if (!localCartItems.length) return;
     
     if (window.confirm("Are you sure you want to clear your cart?")) {
       setIsProcessing(true);
       try {
-        await clearCart();
+        clearCart();
         toast.success("Cart cleared");
       } catch (error: any) {
         console.error('Error clearing cart:', error);
         toast.error("Failed to clear cart");
-        await refreshCart();
       } finally {
         setIsProcessing(false);
       }
@@ -293,53 +245,47 @@ const Cart = () => {
   };
 
   // Calculate delivery fee
-  const calculateDeliveryFee = (items: CartItem[]): number => {
+  const calculateDeliveryFee = (items: LocalCartItem[]): number => {
     if (!items || items.length === 0) return 0;
     return 200; // Fixed delivery fee for demo
   };
 
   // Check if any gas product is unavailable
-  const hasUnavailableItems = gasProductItems.some((item: CartItem) => {
-    const productId = item.gas_product || item.product_id || item.product || item.id;
-    const productDetails = item.gas_product_details || createMockGasProduct(productId);
-    return !productDetails.is_available || !productDetails.in_stock;
+  const hasUnavailableItems = localCartItems.some((item: LocalCartItem) => {
+    return !item.is_available;
   });
 
   // Check for low stock items
-  const hasLowStockItems = gasProductItems.some((item: CartItem) => {
-    const productId = item.gas_product || item.product_id || item.product || item.id;
-    const productDetails = item.gas_product_details || createMockGasProduct(productId);
-    return productDetails.in_stock && productDetails.stock_quantity < 3;
+  const hasLowStockItems = localCartItems.some((item: LocalCartItem) => {
+    return item.stock_quantity !== undefined && item.stock_quantity < 3;
   });
 
   // Check for critical stock items (very low stock)
-  const hasCriticalStockItems = gasProductItems.some((item: CartItem) => {
-    const productId = item.gas_product || item.product_id || item.product || item.id;
-    const productDetails = item.gas_product_details || createMockGasProduct(productId);
-    return productDetails.in_stock && productDetails.stock_quantity === 1;
+  const hasCriticalStockItems = localCartItems.some((item: LocalCartItem) => {
+    return item.stock_quantity !== undefined && item.stock_quantity === 1;
   });
 
-  if (loading) {
+  if (state?.isSyncing) {
     return (
       <div className="min-h-screen bg-background pb-24 flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <p className="text-muted-foreground">Loading cart...</p>
+          <p className="text-muted-foreground">Syncing cart...</p>
         </div>
       </div>
     );
   }
 
-  const subtotal = parseFloat(cart?.total_amount?.toString() || '0') || 0;
-  const deliveryFee = calculateDeliveryFee(gasProductItems);
+  const subtotal = state?.total || 0;
+  const deliveryFee = calculateDeliveryFee(localCartItems);
   const total = subtotal + deliveryFee;
 
   console.log('🛒 Final cart data in component:', { 
-    cart, 
-    gasProductItems, 
+    state, 
+    localCartItems, 
     subtotal, 
     total,
-    itemCount: gasProductItems.length 
+    itemCount: localCartItems.length 
   });
 
   return (
@@ -360,13 +306,13 @@ const Cart = () => {
           </div>
           <div className="flex items-center gap-2">
             <ShoppingBag className="h-5 w-5" />
-            <span className="text-sm">{gasProductItems.length} items</span>
+            <span className="text-sm">{localCartItems.length} items</span>
           </div>
         </div>
       </header>
 
       <div className="p-4 space-y-4">
-        {gasProductItems.length === 0 ? (
+        {localCartItems.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12">
             <div className="text-6xl mb-4">🔥</div>
             <h3 className="text-lg font-semibold mb-2">Your gas cart is empty</h3>
@@ -381,7 +327,7 @@ const Cart = () => {
           <>
             {/* Cart Header with Clear Button */}
             <div className="flex justify-between items-center">
-              <h2 className="text-lg font-semibold">Gas Products ({gasProductItems.length})</h2>
+              <h2 className="text-lg font-semibold">Gas Products ({localCartItems.length})</h2>
               <Button
                 variant="outline"
                 size="sm"
@@ -399,31 +345,16 @@ const Cart = () => {
 
             {/* Cart Items */}
             <div className="space-y-3">
-              {gasProductItems.map((item: CartItem, index: number) => {
-                // Get the actual product ID from any possible field
-                const productId = item.gas_product || item.product_id || item.product || item.id;
-                const productDetails = item.gas_product_details || createMockGasProduct(productId);
-                
-                // ✅ FIXED: Ensure prices are numbers with proper fallbacks
-                const unitPrice = typeof item.unit_price === 'string' ? 
-                  parseFloat(item.unit_price) : 
-                  (item.unit_price || 0);
-                
-                const totalPrice = typeof item.total_price === 'string' ? 
-                  parseFloat(item.total_price) : 
-                  (item.total_price || 0);
-                
-                const isUnavailable = !productDetails.is_available || !productDetails.in_stock;
-                const isLowStock = productDetails.in_stock && productDetails.stock_quantity < 5;
-                const isCriticalStock = productDetails.in_stock && productDetails.stock_quantity === 1;
+              {localCartItems.map((item: LocalCartItem, index: number) => {
+                const isUnavailable = !item.is_available;
+                const isLowStock = item.stock_quantity !== undefined && item.stock_quantity < 5;
+                const isCriticalStock = item.stock_quantity !== undefined && item.stock_quantity === 1;
                 
                 console.log(`🔄 Rendering cart item ${item.id}:`, { 
-                  productId, 
                   item,
-                  productDetails,
-                  unitPrice,
-                  totalPrice,
-                  item_type: item.item_type // Log the item_type for debugging
+                  isUnavailable,
+                  isLowStock,
+                  isCriticalStock
                 });
                 
                 return (
@@ -444,7 +375,7 @@ const Cart = () => {
                         <div className="flex-1">
                           <div className="flex items-start justify-between">
                             <h3 className="font-semibold">
-                              {productDetails.name}
+                              {item.name}
                             </h3>
                             {isCriticalStock && (
                               <Badge variant="destructive" className="text-xs">
@@ -455,26 +386,14 @@ const Cart = () => {
                           </div>
                           
                           <p className="text-sm text-muted-foreground">
-                            {productDetails.cylinder_size} • {productDetails.gas_type?.toUpperCase()}
+                            {item.cylinder_size} • {item.gas_type?.toUpperCase()}
                           </p>
-                          
-                          {/* Cylinder Option */}
-                          {item.include_cylinder !== undefined && (
-                            <Badge variant="outline" className="mt-1 text-xs">
-                              {item.include_cylinder ? 'With Cylinder' : 'Without Cylinder'}
-                            </Badge>
-                          )}
                           
                           {/* Vendor Info */}
                           <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
                             <MapPin className="h-3 w-3" />
-                            <span>{productDetails.vendor_name}</span>
+                            <span>{item.vendor_name}</span>
                           </div>
-                          
-                          {/* Item Type Badge (for debugging) */}
-                          <Badge variant="outline" className="mt-1 text-xs">
-                            Type: {item.item_type}
-                          </Badge>
                           
                           {/* Availability Badge */}
                           {isUnavailable && (
@@ -486,14 +405,13 @@ const Cart = () => {
                           {/* Stock Warning */}
                           {isLowStock && !isCriticalStock && (
                             <Badge variant="outline" className="mt-1 text-xs bg-orange-50 text-orange-700">
-                              Low Stock: {productDetails.stock_quantity} left
+                              Low Stock: {item.stock_quantity} left
                             </Badge>
                           )}
                           
                           <div className="flex items-center justify-between mt-2">
                             <span className="font-bold text-primary">
-                              {/* ✅ FIXED: Safe total price display */}
-                              KSh {totalPrice ? totalPrice.toLocaleString() : '0'}
+                              KSh {(item.price * item.quantity).toLocaleString()}
                             </span>
                             
                             {/* Quantity Controls */}
@@ -522,7 +440,7 @@ const Cart = () => {
                                 disabled={
                                   isProcessing ||
                                   isUnavailable ||
-                                  item.quantity >= productDetails.stock_quantity
+                                  (item.stock_quantity !== undefined && item.quantity >= item.stock_quantity)
                                 }
                               >
                                 <Plus className="h-3 w-3" />
@@ -549,8 +467,7 @@ const Cart = () => {
                       
                       {/* Unit Price */}
                       <div className="mt-2 text-sm text-muted-foreground">
-                        {/* ✅ FIXED: Safe unit price display */}
-                        Unit price: KSh {unitPrice ? unitPrice.toLocaleString() : '0'} each
+                        Unit price: KSh {item.price.toLocaleString()} each
                       </div>
                     </Card>
                   </motion.div>
@@ -563,7 +480,7 @@ const Cart = () => {
               <h3 className="font-semibold mb-3">Order Summary</h3>
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Subtotal ({gasProductItems.length} items)</span>
+                  <span className="text-muted-foreground">Subtotal ({localCartItems.length} items)</span>
                   <span>KSh {subtotal.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between">
@@ -603,58 +520,45 @@ const Cart = () => {
               )}
               
               <Button 
-                  className="w-full mt-4 bg-secondary hover:bg-secondary/90"
-                  size="lg"
-                  onClick={() => {
-                    console.log('🛒 Navigating to checkout with items:', gasProductItems);
-                    
-                    // Transform cart items to match Checkout.tsx expected format
-                    const orderItems = gasProductItems.map((item: CartItem) => {
-                      const productId = item.gas_product || item.product_id || item.product || item.id;
-                      const productDetails = item.gas_product_details || createMockGasProduct(productId);
-                      
-                      const unitPrice = typeof item.unit_price === 'string' ? 
-                        parseFloat(item.unit_price) : 
-                        (item.unit_price || 0);
-                      
-                      const totalPrice = typeof item.total_price === 'string' ? 
-                        parseFloat(item.total_price) : 
-                        (item.total_price || 0);
+                className="w-full mt-4 bg-secondary hover:bg-secondary/90"
+                size="lg"
+                onClick={() => {
+                  console.log('🛒 Navigating to checkout with items:', localCartItems);
+                  
+                  // Transform cart items to match Checkout.tsx expected format
+                  const orderItems = localCartItems.map((item: LocalCartItem) => ({
+                    id: item.id,
+                    productId: item.id,
+                    productName: item.name,
+                    vendorName: item.vendor_name,
+                    quantity: item.quantity,
+                    unitPrice: item.price,
+                    totalAmount: item.price * item.quantity,
+                    includeCylinder: false,
+                    description: `${item.cylinder_size} • ${item.gas_type?.toUpperCase()}`
+                  }));
 
-                      return {
-                        id: item.id,
-                        productId: productId,
-                        productName: productDetails.name,
-                        vendorName: productDetails.vendor_name,
-                        quantity: item.quantity,
-                        unitPrice: unitPrice,
-                        totalAmount: totalPrice,
-                        includeCylinder: item.include_cylinder || false,
-                        description: `${productDetails.cylinder_size} • ${productDetails.gas_type?.toUpperCase()}`
-                      };
-                    });
+                  console.log('🛒 Transformed order items:', orderItems);
 
-                    console.log('🛒 Transformed order items:', orderItems);
-
-                    navigate("/checkout", { 
-                      state: { 
-                        orderItems: orderItems, // ✅ Changed from cartItems to orderItems
-                        totalAmount: total,
-                        cartData: cart
-                      } 
-                    });
-                  }}
-                  disabled={hasUnavailableItems || gasProductItems.length === 0 || isProcessing}
-                >
-                  {isProcessing ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Processing...
-                    </>
-                  ) : (
-                    `Proceed to Checkout (KSh ${total.toLocaleString()})`
-                  )}
-                </Button>
+                  navigate("/checkout", { 
+                    state: { 
+                      orderItems: orderItems,
+                      totalAmount: total,
+                      cartData: state
+                    } 
+                  });
+                }}
+                disabled={hasUnavailableItems || localCartItems.length === 0 || isProcessing}
+              >
+                {isProcessing ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  `Proceed to Checkout (KSh ${total.toLocaleString()})`
+                )}
+              </Button>
             </Card>
           </>
         )}

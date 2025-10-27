@@ -7,7 +7,10 @@ interface MainLayoutProps {
 
 const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   
-  const { cartItemCount } = useCart();
+  const { state } = useCart(); // ✅ FIXED: Use state instead of cartItemCount
+  
+  // ✅ FIXED: Get cartItemCount from state
+  const cartItemCount = state?.itemCount || 0;
 
   // Your layout implementation
   return (

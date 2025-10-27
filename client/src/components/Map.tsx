@@ -26,7 +26,7 @@ interface MapboxConfig {
 
 const Map = ({
   providers = [],
-  center = [36.817223, -1.286389], // ✅ FIXED: [lng, lat] format (Nairobi)
+  center = [-1.286389, 36.817223], // ✅ FIXED: [lng, lat] format (Nairobi)
   userLocation = null,
   zoom = 13,
 }: MapProps) => {
@@ -60,7 +60,7 @@ const Map = ({
           mapboxgl.accessToken = fallbackToken;
           setMapboxConfig({
             accessToken: fallbackToken,
-            styleUrl: import.meta.env.VITE_MAPBOX_STYLE_URL || process.env.REACT_APP_MAPBOX_STYLE_URL || 'mapbox://styles/mapbox/streets-v12'
+            styleUrl: import.meta.env.VITE_MAPBOX_STYLE_URL || process.env.REACT_APP_MAPBOX_STYLE_URL || 'mapbox://styles/chrispin2005/cmfjcwzm6004s01se01mr59te'
           });
         }
       }

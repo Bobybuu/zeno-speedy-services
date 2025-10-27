@@ -1,3 +1,4 @@
+// services/GasServices.tsx
 import { useState, useEffect } from "react"; 
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, MapPin, Filter, Search, Star, Loader2 } from "lucide-react";
@@ -8,10 +9,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Map from "@/components/Map";
 import BottomNav from "@/components/BottomNav";
 import { motion } from "framer-motion";
-import { gasProductsAPI, vendorsAPI } from "@/services/api";
+import { gasProductsAPI, vendorsAPI } from "@/services/vendorService";
 import { toast } from "sonner";
 
-// Updated interface for Gas Products
+// Updated interface for Gas Products - includes vendor_id and all vendor properties made optional
 interface GasProduct {
   id: number;
   name: string;
@@ -19,16 +20,25 @@ interface GasProduct {
   cylinder_size: string;
   price_with_cylinder: number;
   price_without_cylinder: number;
+  vendor_id: number; // ✅ ADDED: vendor_id field
   vendor_name: string;
   vendor_city: string;
-  vendor_latitude: number;
-  vendor_longitude: number;
+  vendor_latitude?: number; 
+  vendor_longitude?: number;
   is_available: boolean;
   in_stock: boolean;
   stock_quantity: number;
   description?: string;
-  vendor_address: string;
-  vendor_contact: string;
+  vendor_address?: string;
+  vendor_contact?: string;
+}
+
+// Interface for API response structure
+interface GasProductsResponse {
+  count: number;
+  results: GasProduct[];
+  next?: string | null;
+  previous?: string | null;
 }
 
 const GasServices = () => {
@@ -74,7 +84,31 @@ const GasServices = () => {
       }
 
       const response = await gasProductsAPI.getGasProducts(filters);
-      setProducts(response.data);
+      
+      // ✅ FIXED: Handle both array and paginated response structures
+      let productsData: GasProduct[] = [];
+      
+      if (Array.isArray(response)) {
+        // Response is a simple array
+        productsData = response;
+      } else if (response && typeof response === 'object') {
+        // Response is a paginated object with results property
+        productsData = (response as GasProductsResponse).results || response.results || [];
+      }
+      
+      // Transform response to include vendor_id and ensure proper typing
+      const transformedProducts = productsData.map((product: any) => ({
+        ...product,
+        vendor_id: product.vendor?.id || product.vendor_id || product.vendor || 1, // Extract vendor_id
+        vendor_name: product.vendor_name || product.vendor?.business_name || 'Unknown Vendor',
+        vendor_city: product.vendor_city || product.vendor?.city || 'Unknown City',
+        vendor_address: product.vendor_address || product.vendor?.address || 'Address not available',
+        vendor_contact: product.vendor_contact || product.vendor?.contact_number || 'Contact not available',
+        vendor_latitude: product.vendor_latitude || product.vendor?.latitude,
+        vendor_longitude: product.vendor_longitude || product.vendor?.longitude,
+      }));
+      
+      setProducts(transformedProducts as GasProduct[]);
     } catch (error: any) {
       console.error("Error fetching gas products:", error);
       toast.error("Failed to load gas products");
@@ -86,7 +120,7 @@ const GasServices = () => {
     }
   };
 
-  // Mock data fallback
+  // Mock data fallback with vendor_id
   const getMockGasProducts = (): GasProduct[] => [
     {
       id: 1,
@@ -95,6 +129,7 @@ const GasServices = () => {
       cylinder_size: "13kg",
       price_with_cylinder: 3500,
       price_without_cylinder: 2800,
+      vendor_id: 1, // ✅ ADDED: vendor_id
       vendor_name: "Nairobi Gas Center",
       vendor_city: "Nairobi",
       vendor_latitude: -1.286389,
@@ -113,6 +148,7 @@ const GasServices = () => {
       cylinder_size: "6kg",
       price_with_cylinder: 1800,
       price_without_cylinder: 1500,
+      vendor_id: 2, // ✅ ADDED: vendor_id
       vendor_name: "Westlands Gas Shop",
       vendor_city: "Nairobi",
       vendor_latitude: -1.266667,
@@ -131,6 +167,7 @@ const GasServices = () => {
       cylinder_size: "22kg",
       price_with_cylinder: 5200,
       price_without_cylinder: 4500,
+      vendor_id: 3, // ✅ ADDED: vendor_id
       vendor_name: "Kilimani Gas Depot",
       vendor_city: "Nairobi",
       vendor_latitude: -1.300000,
@@ -144,14 +181,20 @@ const GasServices = () => {
     }
   ];
 
-  const filteredProducts = products.filter(product =>
-    product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    product.vendor_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    product.vendor_address.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    product.cylinder_size.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // ✅ FIXED: Added proper null/undefined checking for filteredProducts
+  const filteredProducts = (products || []).filter(product => {
+    if (!product) return false;
+    
+    const searchLower = searchQuery.toLowerCase();
+    return (
+      (product.name?.toLowerCase() || '').includes(searchLower) ||
+      (product.vendor_name?.toLowerCase() || '').includes(searchLower) ||
+      (product.vendor_address?.toLowerCase() || '').includes(searchLower) ||
+      (product.cylinder_size?.toLowerCase() || '').includes(searchLower)
+    );
+  });
 
-  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): string => {
+  const calculateDistance = (lat1: number, lon1: number, lat2?: number, lon2?: number): string => {
     if (!lat1 || !lon1 || !lat2 || !lon2) return "Unknown";
     
     const R = 6371; // Earth's radius in km
@@ -171,20 +214,31 @@ const GasServices = () => {
     return `KSh ${price.toLocaleString()}`;
   };
 
-  // Updated click handler - FIXED: Use consistent route pattern
+  // ✅ UPDATED: Click handler with vendor_id
   const handleProductClick = (product: GasProduct) => {
+    if (!product) {
+      toast.error("Invalid product data");
+      return;
+    }
+    
+    console.log('🛒 Navigating to product details:', {
+      productId: product.id,
+      vendorId: product.vendor_id,
+      vendorName: product.vendor_name
+    });
+    
     navigate(`/services/gas/providers/${product.id}`, {
       state: {
         product: product,
         vendor: {
-          id: product.id,
+          id: product.vendor_id, // ✅ FIXED: Use actual vendor_id instead of product.id
           business_name: product.vendor_name,
-          address: product.vendor_address,
-          contact_number: product.vendor_contact,
+          address: product.vendor_address || "Address not available",
+          contact_number: product.vendor_contact || "Contact not available",
           city: product.vendor_city,
           latitude: product.vendor_latitude,
           longitude: product.vendor_longitude,
-          business_type: 'gas_station' // Add business_type for consistency
+          business_type: 'gas_station'
         }
       }
     });
@@ -277,10 +331,10 @@ const GasServices = () => {
               providers={filteredProducts.map(product => ({
                 id: product.id,
                 name: product.vendor_name,
-                location: product.vendor_address,
+                location: product.vendor_address || "Address not available",
                 price: formatPrice(product.price_with_cylinder),
                 rating: 4.5,
-                distance: userLocation 
+                distance: userLocation && product.vendor_latitude && product.vendor_longitude
                   ? calculateDistance(
                       userLocation[0], 
                       userLocation[1], 
@@ -288,8 +342,11 @@ const GasServices = () => {
                       product.vendor_longitude
                     )
                   : "Unknown",
-                coords: [product.vendor_latitude, product.vendor_longitude] as [number, number]
-              }))}
+                coords: product.vendor_latitude && product.vendor_longitude 
+                  ? [product.vendor_latitude, product.vendor_longitude] as [number, number]
+                  : undefined,
+                vendor_id: product.vendor_id // ✅ ADDED: Include vendor_id in map markers
+              })).filter(provider => provider.coords !== undefined)}
               userLocation={userLocation}
             />
           </div>
@@ -336,13 +393,13 @@ const GasServices = () => {
                         </p>
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                           <MapPin className="h-4 w-4" />
-                          <span className="flex-1">{product.vendor_address}</span>
+                          <span className="flex-1">{product.vendor_address || "Address not available"}</span>
                         </div>
                         <div className="flex items-center justify-between mt-2">
                           <div className="text-lg font-bold text-primary">
                             {formatPrice(product.price_with_cylinder)}
                           </div>
-                          {userLocation && (
+                          {userLocation && product.vendor_latitude && product.vendor_longitude && (
                             <div className="text-sm text-muted-foreground">
                               {calculateDistance(
                                 userLocation[0], 
@@ -359,10 +416,13 @@ const GasServices = () => {
                             <span className="text-sm">4.5</span>
                           </div>
                           <span className="text-sm text-muted-foreground">
-                            • {product.vendor_contact}
+                            • {product.vendor_contact || "Contact not available"}
                           </span>
                           <span className="text-sm text-muted-foreground">
                             • Stock: {product.stock_quantity}
+                          </span>
+                          <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                            Vendor ID: {product.vendor_id}
                           </span>
                         </div>
                       </div>
@@ -417,13 +477,13 @@ const GasServices = () => {
                         </p>
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                           <MapPin className="h-4 w-4" />
-                          <span>{product.vendor_address}</span>
+                          <span>{product.vendor_address || "Address not available"}</span>
                         </div>
                         <div className="flex items-center justify-between mt-3">
                           <div className="text-lg font-bold text-primary">
                             {formatPrice(product.price_with_cylinder)}
                           </div>
-                          {userLocation && (
+                          {userLocation && product.vendor_latitude && product.vendor_longitude && (
                             <div className="text-sm text-muted-foreground">
                               {calculateDistance(
                                 userLocation[0], 
@@ -440,10 +500,13 @@ const GasServices = () => {
                             <span className="text-sm">4.5</span>
                           </div>
                           <span className="text-sm text-muted-foreground">
-                            • {product.vendor_contact}
+                            • {product.vendor_contact || "Contact not available"}
                           </span>
                           <span className="text-sm text-muted-foreground">
                             • Stock: {product.stock_quantity}
+                          </span>
+                          <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                            Vendor ID: {product.vendor_id}
                           </span>
                         </div>
                         <Button 

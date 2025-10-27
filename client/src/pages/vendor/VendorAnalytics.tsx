@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { vendorDashboardAPI } from '@/services/api';
+import { vendorDashboardAPI } from '@/services/vendorService';
 import { 
   BarChart3, 
   DollarSign, 
@@ -21,7 +21,7 @@ const VendorAnalytics = () => {
     queryKey: ['vendor-analytics', timeRange],
     queryFn: async () => {
       const response = await vendorDashboardAPI.getOrderAnalytics(timeRange.replace('d', ''));
-      return response.data; // ✅ Access the data property
+      return response; // ✅ REMOVED .data - response is already the data
     },
   });
 
@@ -29,7 +29,7 @@ const VendorAnalytics = () => {
     queryKey: ['vendor-dashboard-analytics'],
     queryFn: async () => {
       const response = await vendorDashboardAPI.getDashboardAnalytics();
-      return response.data; // ✅ Access the data property
+      return response; // ✅ REMOVED .data - response is already the data
     },
   });
 

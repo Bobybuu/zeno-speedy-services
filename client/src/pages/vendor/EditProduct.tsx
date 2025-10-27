@@ -1,7 +1,7 @@
 // src/pages/vendor/EditProduct.tsx
 import React, { useState, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { gasProductsAPI } from '@/services/api';
+import { gasProductsAPI } from '@/services/vendorService';
 import { useNavigate, useParams } from 'react-router-dom';
 import { 
   Package, 
@@ -53,7 +53,7 @@ const EditProduct = () => {
     queryFn: async () => {
       if (!productId) throw new Error('Product ID is required');
       const response = await gasProductsAPI.getGasProduct(parseInt(productId));
-      return response.data;
+      return response; // ✅ REMOVED .data - response is already the data
     },
     enabled: !!productId,
   });

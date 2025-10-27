@@ -9,6 +9,15 @@ import { motion } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 
+// Define local error type to fix TypeScript issues
+interface LoginError {
+  message?: string;
+  phone_number?: string[];
+  password?: string[];
+  detail?: string;
+  field_errors?: Record<string, string[]>;
+}
+
 const Login = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
@@ -43,15 +52,23 @@ const Login = () => {
         toast.success("Login successful!");
         navigate("/dashboard");
       } else {
-        // Handle specific error cases
-        if (result.error?.phone_number) {
-          toast.error(result.error.phone_number[0]);
-        } else if (result.error?.password) {
-          toast.error(result.error.password[0]);
-        } else if (result.error?.detail) {
-          toast.error(result.error.detail);
+        // ✅ FIXED: Use proper error handling with local error type
+        const error = result.error as LoginError;
+        
+        if (error?.field_errors?.phone_number) {
+          toast.error(error.field_errors.phone_number[0]);
+        } else if (error?.field_errors?.password) {
+          toast.error(error.field_errors.password[0]);
+        } else if (error?.phone_number) {
+          toast.error(Array.isArray(error.phone_number) ? error.phone_number[0] : error.phone_number);
+        } else if (error?.password) {
+          toast.error(Array.isArray(error.password) ? error.password[0] : error.password);
+        } else if (error?.detail) {
+          toast.error(error.detail);
+        } else if (error?.message) {
+          toast.error(error.message);
         } else {
-          toast.error(result.error?.message || "Login failed");
+          toast.error("Login failed. Please check your credentials.");
         }
       }
     } catch (error) {

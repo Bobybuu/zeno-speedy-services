@@ -1,572 +1,460 @@
-// src/context/CartContext.tsx - COMPLETE FIXED VERSION
-import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo } from 'react';
-import { cartAPI } from '@/services/api';
+// src/context/CartContext.tsx
+import React, { createContext, useContext, useReducer, ReactNode, useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { cartApiService } from '@/services/cartApi';
+import { vendorsApiService } from '@/services/vendorService';
+import { isAuthenticated } from '@/services/api';
 
-// Interfaces
+// Types
 export interface CartItem {
   id: number;
-  item_type: string;
-  gas_product?: number;
-  product?: number;
-  product_id?: number;
+  name: string;
+  price: number;
   quantity: number;
-  unit_price: string | number;
-  total_price: string | number;
-  added_at: string;
-  item_name: string;
-  include_cylinder?: boolean;
-  gas_product_details?: any;
-  vendor?: number;
+  image?: string;
+  vendor_id: number;
+  vendor_name: string;
+  vendor_city: string;
+  gas_type?: string;
+  cylinder_size?: string;
+  price_with_cylinder?: number;
+  price_without_cylinder?: number;
+  stock_quantity?: number;
+  is_available?: boolean;
 }
 
-export interface Cart {
-  id: number | null;
+interface CartState {
   items: CartItem[];
-  total_amount: number;
-  item_count: number;
-  created_at: string;
-  updated_at: string;
+  total: number;
+  itemCount: number;
+  lastSynced?: string;
+  isSyncing: boolean;
 }
+
+type CartAction =
+  | { type: 'ADD_ITEM'; payload: CartItem }
+  | { type: 'REMOVE_ITEM'; payload: number }
+  | { type: 'UPDATE_QUANTITY'; payload: { id: number; quantity: number } }
+  | { type: 'CLEAR_CART' }
+  | { type: 'LOAD_CART'; payload: CartState }
+  | { type: 'SET_SYNCING'; payload: boolean }
+  | { type: 'SYNC_SUCCESS'; payload: { items: CartItem[]; lastSynced: string } };
 
 interface CartContextType {
-  cart: Cart | null;
-  loading: boolean;
-  addToCart: (productId: number, quantity?: number, includeCylinder?: boolean) => Promise<any>;
-  updateCartItem: (itemId: number, quantity: number) => Promise<any>;
-  removeFromCart: (itemId: number) => Promise<any>;
-  clearCart: () => Promise<any>;
-  refreshCart: () => Promise<void>;
-  createOrderFromCart: (deliveryAddress: string) => Promise<any>;
-  
-  // ✅ ADDED: Computed properties for cart summary
-  cartItemCount: number;
-  cartTotal: number;
+  state: CartState;
+  addItem: (item: CartItem) => Promise<void>;
+  removeItem: (id: number) => void;
+  updateQuantity: (id: number, quantity: number) => void;
+  clearCart: () => void;
+  getItemQuantity: (id: number) => number;
+  syncWithBackend: () => Promise<void>;
+  validateCartForCheckout: () => { isValid: boolean; issues: string[] };
+  validateVendor: (vendorId: number) => Promise<boolean>;
+  checkStock: (item: CartItem, quantity: number) => boolean;
+  isOnline: boolean;
 }
 
+// Initial state
+const initialState: CartState = {
+  items: [],
+  total: 0,
+  itemCount: 0,
+  isSyncing: false,
+};
+
+// Create context
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
-// ✅ IMPROVED: Cart normalization function with better unit price handling
-const normalizeCartData = (cartData: any): Cart => {
-  if (!cartData) {
-    return {
-      id: null,
-      items: [],
-      total_amount: 0,
-      item_count: 0,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
-  }
-
-  console.log('🛒 Normalizing cart data:', cartData);
-
-  // Handle different response formats
-  const items = Array.isArray(cartData.items) ? cartData.items : (cartData.cart_items || []);
-  
-  console.log('🛒 Raw items from API:', items);
-
-  // ✅ IMPROVED: Better gas product detection and normalization with unit price fix
-  const normalizedItems = items.map((item: any) => {
-    // ✅ FIX: Detect gas products more accurately
-    const isGasProduct = 
-      item.item_type === 'gas_product' || 
-      item.gas_product !== undefined ||
-      (item.gas_product_details && Object.keys(item.gas_product_details).length > 0) ||
-      (item.item_name && item.item_name.toLowerCase().includes('gas')) ||
-      (item.product_id && item.product_id > 0);
-
-    // ✅ FIX: Calculate unit price if it's missing or 0
-    let unitPrice = typeof item.unit_price === 'string' ? 
-      parseFloat(item.unit_price) : (Number(item.unit_price) || 0);
-    
-    const totalPriceValue = typeof item.total_price === 'string' ? 
-      parseFloat(item.total_price) : (Number(item.total_price) || 0);
-    
-    const quantityValue = Number(item.quantity) || 1;
-    
-    // If unit price is 0 but we have total price and quantity, calculate it
-    if (unitPrice === 0 && totalPriceValue > 0 && quantityValue > 0) {
-      unitPrice = totalPriceValue / quantityValue;
-      console.log(`🔄 Calculated unit price for item ${item.id}:`, {
-        totalPrice: totalPriceValue,
-        quantity: quantityValue,
-        calculatedUnitPrice: unitPrice
-      });
-    }
-
-    // ✅ CRITICAL FIX: Ensure item_type is NEVER null/undefined
-    const itemType = isGasProduct ? 'gas_product' : (item.item_type || 'service');
-
-    const normalizedItem = {
-      id: item.id || 0,
-      item_type: itemType, // ✅ ALWAYS set a valid item_type
-      gas_product: item.gas_product || item.product_id || item.product,
-      product: item.product || item.product_id || item.gas_product,
-      product_id: item.product_id || item.gas_product || item.product,
-      quantity: quantityValue,
-      unit_price: unitPrice,
-      total_price: totalPriceValue,
-      added_at: item.added_at || item.created_at || new Date().toISOString(),
-      item_name: item.item_name || 'Gas Product',
-      include_cylinder: Boolean(item.include_cylinder),
-      gas_product_details: item.gas_product_details || item.product_details || null,
-      vendor: item.vendor || (item.gas_product_details?.vendor || 1)
-    };
-
-    console.log(`🛒 Normalized item ${normalizedItem.id}:`, {
-      original_type: item.item_type,
-      normalized_type: normalizedItem.item_type,
-      isGasProduct,
-      gas_product: normalizedItem.gas_product,
-      unit_price: normalizedItem.unit_price,
-      total_price: normalizedItem.total_price,
-      quantity: normalizedItem.quantity
-    });
-
-    return normalizedItem;
-  });
-
-  const total_amount = typeof cartData.total_amount === 'string' ? 
-    parseFloat(cartData.total_amount) : 
-    (Number(cartData.total_amount) || 0);
-
-  const item_count = Number(cartData.item_count) || normalizedItems.reduce((sum: number, item: any) => sum + item.quantity, 0);
-
-  const normalizedCart: Cart = {
-    id: cartData.id || null,
-    items: normalizedItems,
-    total_amount: total_amount,
-    item_count: item_count,
-    created_at: cartData.created_at || new Date().toISOString(),
-    updated_at: cartData.updated_at || new Date().toISOString()
-  };
-
-  console.log('🛒 Normalized cart object:', normalizedCart);
-  return normalizedCart;
-};
-
-// ✅ ADDED: Network Debugger Component
-const NetworkDebugger: React.FC = () => {
-  useEffect(() => {
-    // Override fetch to log all requests
-    const originalFetch = window.fetch;
-    window.fetch = async (...args) => {
-      console.log('🌐 Fetch request:', args[0], args[1]);
-      try {
-        const response = await originalFetch(...args);
-        console.log('🌐 Fetch response:', response.url, response.status);
-        return response;
-      } catch (error) {
-        console.error('🌐 Fetch error:', error);
-        throw error;
-      }
-    };
-
-    return () => {
-      window.fetch = originalFetch;
-    };
-  }, []);
-
-  return null;
-};
-
-export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [cart, setCart] = useState<Cart | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  // ✅ ADDED: Computed properties for cart summary
-  const cartItemCount = useMemo(() => {
-    if (!cart?.items) return 0;
-    return cart.items.reduce((total, item) => total + item.quantity, 0);
-  }, [cart?.items]);
-
-  const cartTotal = useMemo(() => {
-    if (!cart?.total_amount) return 0;
-    return typeof cart.total_amount === 'string' 
-      ? parseFloat(cart.total_amount) 
-      : cart.total_amount;
-  }, [cart?.total_amount]);
-
-  // Debug cart state changes
-  useEffect(() => {
-    console.log('🔄 Cart state updated:', { 
-      cart, 
-      loading, 
-      cartItemCount, 
-      cartTotal 
-    });
-  }, [cart, loading, cartItemCount, cartTotal]);
-
-  // ✅ IMPROVED: Refresh cart function with better error handling
-  const refreshCart = async (): Promise<void> => {
-    console.log('🔄 refreshCart called');
-    try {
-      setLoading(true);
-      const cartData = await cartAPI.getCart();
-      console.log('📦 Raw cart data from API:', cartData);
+// Reducer
+function cartReducer(state: CartState, action: CartAction): CartState {
+  switch (action.type) {
+    case 'ADD_ITEM': {
+      const existingItem = state.items.find(item => item.id === action.payload.id);
       
-      const normalizedCart = normalizeCartData(cartData);
-      console.log('✨ Normalized cart:', normalizedCart);
-      
-      setCart(normalizedCart);
-    } catch (error) {
-      console.error('❌ Error refreshing cart:', error);
-      // Set empty cart on error
-      setCart({
-        id: null,
-        items: [],
-        total_amount: 0,
-        item_count: 0,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      });
-    } finally {
-      setLoading(false);
-      console.log('✅ refreshCart completed, loading set to false');
-    }
-  };
-
-  // ✅ ENHANCED: Add to cart function with detailed debugging
-  const addToCart = async (productId: number, quantity: number = 1, includeCylinder: boolean = false): Promise<any> => {
-    try {
-      console.log('🛒 Adding product to cart:', { productId, quantity, includeCylinder });
-      
-      // ✅ Use the CORRECT API method with proper parameters
-      const response = await cartAPI.addGasProduct(productId, quantity, includeCylinder);
-      
-      console.log('✅ Product added to cart successfully:', response);
-      
-      // ✅ CRITICAL: Wait a bit before refreshing to ensure backend has processed
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Refresh the cart to get updated data
-      await refreshCart();
-      
-      toast.success('Product added to cart!');
-      return response;
-    } catch (error: any) {
-      console.error('❌ Error adding to cart:', error);
-      
-      // ✅ Enhanced error handling with specific messages
-      let errorMessage = 'Failed to add product to cart';
-      
-      if (error.response?.status === 405) {
-        errorMessage = 'Cart endpoint not available. Please try again.';
-      } else if (error.response?.status === 404) {
-        errorMessage = 'Product not found or unavailable.';
-      } else if (error.response?.status === 400) {
-        errorMessage = error.response.data?.error || 'Invalid request. Please check product availability.';
-      } else if (error.response?.data?.error) {
-        errorMessage = error.response.data.error;
-      }
-      
-      toast.error(errorMessage);
-      throw error;
-    }
-  };
-
-  // ✅ FIXED: Update cart item quantity
-  const updateCartItem = async (itemId: number, quantity: number): Promise<any> => {
-    try {
-      console.log('🔄 Updating cart item:', { itemId, quantity });
-      
-      if (quantity < 1) {
-        // If quantity is 0 or less, remove the item
-        return await removeFromCart(itemId);
-      }
-
-      // ✅ Use the CORRECT API method
-      const response = await cartAPI.updateCartItem(itemId, quantity);
-      console.log('✅ Cart item updated successfully:', response);
-      
-      // Refresh cart to get updated data
-      await refreshCart();
-      
-      return response;
-    } catch (error: any) {
-      console.error('❌ Error updating cart item:', error);
-      
-      const errorMessage = error.response?.data?.message || 'Failed to update cart item';
-      toast.error(errorMessage);
-      throw error;
-    }
-  };
-
-  // ✅ FIXED: Remove item from cart with simplified approach
-  const removeFromCart = async (itemId: number): Promise<any> => {
-    try {
-      setLoading(true);
-      console.log('🗑️ Removing item from cart:', itemId);
-      
-      // ✅ Use the CORRECT API method - cartAPI.removeFromCart now handles the endpoint internally
-      const response = await cartAPI.removeFromCart(itemId);
-      console.log('✅ Item removed from cart successfully:', response);
-      
-      // Refresh cart to get updated data
-      await refreshCart();
-      
-      return response;
-    } catch (error: any) {
-      console.error('❌ Error removing item from cart:', error);
-      
-      let errorMessage = 'Failed to remove item from cart';
-      
-      if (error.response?.status === 404) {
-        errorMessage = 'Item not found. It may have already been removed.';
-        // Refresh cart to sync with server state
-        await refreshCart();
-      } else if (error.response?.data?.error) {
-        errorMessage = error.response.data.error;
-      }
-      
-      toast.error(errorMessage);
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Clear entire cart
-  const clearCart = async (): Promise<any> => {
-    try {
-      console.log('🧹 Clearing entire cart');
-      
-      const response = await cartAPI.clearCart();
-      console.log('✅ Cart cleared successfully:', response);
-      
-      // Refresh cart to get updated empty state
-      await refreshCart();
-      
-      return response;
-    } catch (error: any) {
-      console.error('❌ Error clearing cart:', error);
-      
-      const errorMessage = error.response?.data?.message || 'Failed to clear cart';
-      toast.error(errorMessage);
-      throw error;
-    }
-  };
-
-  // ✅ COMPLETELY FIXED: Create order from cart with proper item structure
-  const createOrderFromCart = async (deliveryAddress: string): Promise<any> => {
-    try {
-      console.log('🛒 Creating order from cart...');
-      console.log('🛒 Current cart state:', cart);
-      
-      // ✅ Better empty cart check
-      if (!cart || !cart.items || cart.items.length === 0) {
-        const errorMsg = 'Cart is empty. Please add items to your cart before ordering.';
-        console.error('❌', errorMsg);
-        throw new Error(errorMsg);
-      }
-      
-      // ✅ FIXED: Better gas product detection
-      const gasProductItems = cart.items.filter((item: CartItem) => {
-        const isGasProduct = 
-          item.item_type === 'gas_product' || 
-          item.gas_product !== undefined ||
-          (item.gas_product_details && Object.keys(item.gas_product_details).length > 0);
+      if (existingItem) {
+        const updatedItems = state.items.map(item =>
+          item.id === action.payload.id
+            ? { ...item, quantity: item.quantity + action.payload.quantity }
+            : item
+        );
         
-        console.log(`🛒 Item ${item.id} gas detection:`, {
-          item_type: item.item_type,
-          isGasProduct
-        });
+        const total = updatedItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+        const itemCount = updatedItems.reduce((sum, item) => sum + item.quantity, 0);
         
-        return isGasProduct;
-      });
-
-      if (gasProductItems.length === 0) {
-        const errorMsg = 'No gas products found in cart. Please add gas products to proceed.';
-        console.error('❌', errorMsg);
-        throw new Error(errorMsg);
-      }
-
-      console.log('✅ Creating order with gas product items:', gasProductItems);
-
-      // ✅ CRITICAL FIX: Transform items with proper structure for backend
-      const orderItems = gasProductItems.map((item: CartItem) => {
-        const unitPriceNum = typeof item.unit_price === 'string' ? 
-          parseFloat(item.unit_price) : Number(item.unit_price);
-        const totalPriceNum = typeof item.total_price === 'string' ? 
-          parseFloat(item.total_price) : Number(item.total_price);
-        
-        const calculatedUnitPrice = unitPriceNum > 0 
-          ? unitPriceNum
-          : totalPriceNum / Number(item.quantity);
-
-        // ✅ CRITICAL FIX: Use the EXACT structure backend expects
-        const orderItem = {
-          product: item.gas_product || item.product_id,
-          quantity: item.quantity,
-          unit_price: calculatedUnitPrice,
-          include_cylinder: item.include_cylinder || false,
-          // ✅ EXPLICITLY SET item_type - this is what the backend wants
-          item_type: 'gas_product' // Hardcoded to ensure it's never null
+        return {
+          ...state,
+          items: updatedItems,
+          total,
+          itemCount,
         };
-
-        console.log(`🛒 Transformed order item ${item.id}:`, orderItem);
-        return orderItem;
-      });
-
-      // Get vendor from first item
-      const vendorId = gasProductItems[0]?.vendor || 1;
-
-      // ✅ CRITICAL FIX: Complete order payload with all required fields
-      const orderData = {
-        vendor: vendorId,
-        items: orderItems,
-        delivery_address: deliveryAddress,
-        delivery_latitude: 0, // You might want to get actual coordinates
-        delivery_longitude: 0,
-        special_instructions: '',
-        // ✅ REQUIRED FIELD:
-        delivery_type: 'delivery' // or 'pickup' based on user selection
+      }
+      
+      const newItems = [...state.items, action.payload];
+      const total = newItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+      const itemCount = newItems.reduce((sum, item) => sum + item.quantity, 0);
+      
+      return {
+        ...state,
+        items: newItems,
+        total,
+        itemCount,
       };
-
-      console.log('📦 FINAL Order payload:', JSON.stringify(orderData, null, 2));
-
-      // Import ordersAPI here to avoid circular dependency
-      const { ordersAPI } = await import('@/services/api');
-      console.log('🚀 Sending order creation request...');
+    }
+    
+    case 'REMOVE_ITEM': {
+      const filteredItems = state.items.filter(item => item.id !== action.payload);
+      const total = filteredItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+      const itemCount = filteredItems.reduce((sum, item) => sum + item.quantity, 0);
       
-      try {
-        const response = await ordersAPI.createOrder(orderData);
-        console.log('✅ Order created successfully:', response.data);
-        
-        // Clear cart after successful order creation
-        await clearCart();
-        
-        return response.data;
-      } catch (apiError: any) {
-        console.error('❌ API Error details:', {
-          status: apiError.response?.status,
-          data: apiError.response?.data,
-        });
-        
-        // Log backend validation errors
-        if (apiError.response?.data) {
-          console.error('❌ Backend validation errors:', JSON.stringify(apiError.response.data, null, 2));
-        }
-        
-        throw apiError;
+      return {
+        ...state,
+        items: filteredItems,
+        total,
+        itemCount,
+      };
+    }
+    
+    case 'UPDATE_QUANTITY': {
+      if (action.payload.quantity <= 0) {
+        return cartReducer(state, { type: 'REMOVE_ITEM', payload: action.payload.id });
       }
-    } catch (error: any) {
-      console.error('❌ Error creating order from cart:', error);
-      console.error('❌ Error details:', {
-        message: error.message,
-        response: error.response,
-        data: error.response?.data,
-        status: error.response?.status
-      });
       
-      // Provide more specific error messages
-      if (error.message.includes('empty')) {
-        throw new Error('Your cart is empty. Please add items before ordering.');
-      } else if (error.message.includes('MULTI_VENDOR_ERROR')) {
-        throw new Error('Your cart contains items from different vendors. Please order from one vendor at a time.');
-      } else if (error.response?.status === 400) {
-        const backendError = error.response.data;
-        console.error('❌ Backend validation error:', backendError);
-        
-        // ✅ IMPROVED: More specific error messages based on backend response
-        if (backendError.items && backendError.items.includes('Invalid item type: None')) {
-          throw new Error('Cart items have invalid types. Please refresh your cart and try again.');
-        }
-        
-        throw new Error(backendError.detail || backendError.error || 'Invalid order data. Please check your cart items.');
-      } else {
-        throw new Error('Failed to create order. Please try again.');
+      const updatedItems = state.items.map(item =>
+        item.id === action.payload.id
+          ? { ...item, quantity: action.payload.quantity }
+          : item
+      );
+      
+      const total = updatedItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+      const itemCount = updatedItems.reduce((sum, item) => sum + item.quantity, 0);
+      
+      return {
+        ...state,
+        items: updatedItems,
+        total,
+        itemCount,
+      };
+    }
+    
+    case 'CLEAR_CART':
+      return {
+        ...initialState,
+        lastSynced: state.lastSynced
+      };
+      
+    case 'LOAD_CART':
+      return action.payload;
+      
+    case 'SET_SYNCING':
+      return {
+        ...state,
+        isSyncing: action.payload
+      };
+      
+    case 'SYNC_SUCCESS':
+      const total = action.payload.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+      const itemCount = action.payload.items.reduce((sum, item) => sum + item.quantity, 0);
+      
+      return {
+        ...state,
+        items: action.payload.items,
+        total,
+        itemCount,
+        lastSynced: action.payload.lastSynced,
+        isSyncing: false
+      };
+      
+    default:
+      return state;
+  }
+}
+
+// Provider component
+interface CartProviderProps {
+  children: ReactNode;
+}
+
+export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
+  const [state, dispatch] = useReducer(cartReducer, initialState);
+  const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
+
+  // Enhanced addItem with validation
+  const addItem = async (item: CartItem): Promise<void> => {
+    try {
+      // 1. Check vendor restriction
+      const existingVendorItems = state.items.filter(cartItem => 
+        cartItem.vendor_id !== item.vendor_id
+      );
+
+      if (existingVendorItems.length > 0 && state.items.length > 0) {
+        toast.error('Cannot add items from different vendors. Please clear cart first.');
+        return;
       }
+
+      // 2. Validate vendor
+      const isVendorValid = await validateVendor(item.vendor_id);
+      if (!isVendorValid) {
+        toast.error('This vendor is not available. Please choose another vendor.');
+        return;
+      }
+
+      // 3. Check stock availability
+      if (!checkStock(item, item.quantity)) {
+        return;
+      }
+
+      // 4. Add to local state
+      dispatch({ type: 'ADD_ITEM', payload: item });
+      toast.success(`${item.name} added to cart`);
+
+      // 5. Sync with backend if authenticated and online
+      if (isAuthenticated() && isOnline) {
+        await syncWithBackend();
+      }
+
+    } catch (error) {
+      console.error('Error adding item to cart:', error);
+      toast.error('Failed to add item to cart');
     }
   };
 
-  // ✅ ADDED: Debug function to check cart items before order creation
-  const debugCartItems = () => {
-    if (!cart?.items) {
-      console.log('🛒 No cart items found');
+  const removeItem = (id: number) => {
+    dispatch({ type: 'REMOVE_ITEM', payload: id });
+    toast.info('Item removed from cart');
+    
+    // Sync with backend if authenticated
+    if (isAuthenticated() && isOnline) {
+      syncWithBackend();
+    }
+  };
+
+  const updateQuantity = (id: number, quantity: number) => {
+    const item = state.items.find(item => item.id === id);
+    if (item && !checkStock(item, quantity)) {
       return;
     }
     
-    console.log('🔍 DEBUG - Cart Items Analysis:');
-    cart.items.forEach((item: CartItem, index: number) => {
-      console.log(`Item ${index}:`, {
-        id: item.id,
-        item_type: item.item_type,
-        gas_product: item.gas_product,
-        product_id: item.product_id,
-        quantity: item.quantity,
-        unit_price: item.unit_price,
-        total_price: item.total_price,
-        include_cylinder: item.include_cylinder,
-        gas_product_details: item.gas_product_details
-      });
-    });
-  };
-
-  // ✅ ADDED: Test function to manually add items to cart
-  const testAddToCart = async () => {
-    try {
-      console.log('🧪 Testing cart addition...');
-      
-      // Use a known product ID (like 6 from your previous attempts)
-      const testProductId = 6;
-      const testQuantity = 1;
-      const includeCylinder = false;
-      
-      console.log('🧪 Test parameters:', { testProductId, testQuantity, includeCylinder });
-      
-      await addToCart(testProductId, testQuantity, includeCylinder);
-      
-      console.log('✅ Test cart addition completed');
-    } catch (error) {
-      console.error('❌ Test cart addition failed:', error);
+    dispatch({ type: 'UPDATE_QUANTITY', payload: { id, quantity } });
+    
+    // Sync with backend if authenticated
+    if (isAuthenticated() && isOnline) {
+      syncWithBackend();
     }
   };
 
-  // Initialize cart on component mount
-  useEffect(() => {
-    const initializeCart = async () => {
-      console.log('🚀 Initializing cart...');
-      await refreshCart();
+  const clearCart = () => {
+    dispatch({ type: 'CLEAR_CART' });
+    toast.info('Cart cleared');
+    
+    // Sync with backend if authenticated
+    if (isAuthenticated() && isOnline) {
+      syncWithBackend();
+    }
+  };
+
+  const getItemQuantity = (id: number): number => {
+    const item = state.items.find(item => item.id === id);
+    return item ? item.quantity : 0;
+  };
+
+  // 1. Sync with Backend Cart API
+  const syncWithBackend = async (): Promise<void> => {
+    if (!isAuthenticated() || state.isSyncing) return;
+    
+    dispatch({ type: 'SET_SYNCING', payload: true });
+    
+    try {
+      const backendCart = await cartApiService.getCart();
       
-      // Check if user is authenticated and sync localStorage cart if needed
-      const token = localStorage.getItem('access_token');
-      if (token) {
-        try {
-          await cartAPI.syncLocalStorageCart();
-        } catch (error) {
-          console.error('Error syncing localStorage cart:', error);
+      // Merge strategy: Prefer local cart if both have items, otherwise use backend
+      let mergedItems: CartItem[] = [];
+      
+      if (state.items.length > 0 && backendCart.items.length > 0) {
+        // Both have items - prefer local cart but validate with backend data
+        mergedItems = state.items.map(localItem => {
+          const backendItem = backendCart.items.find(bi => 
+            bi.gas_product_id === localItem.id || bi.service_id === localItem.id
+          );
+          
+          if (backendItem) {
+            // Update local item with backend availability info
+            return {
+              ...localItem,
+              is_available: backendItem.gas_product_details?.is_available ?? localItem.is_available,
+              stock_quantity: backendItem.gas_product_details?.stock_quantity ?? localItem.stock_quantity
+            };
+          }
+          return localItem;
+        });
+      } else if (backendCart.items.length > 0) {
+        // Only backend has items - convert backend format to local format
+        mergedItems = backendCart.items.map(backendItem => ({
+        id: backendItem.gas_product_id || backendItem.service_id || 0,
+        name: backendItem.item_name,
+        price: Number(backendItem.unit_price),
+        quantity: backendItem.quantity,
+        // FIXED: Use vendor_id, vendor_name, vendor_city directly instead of vendor_info
+        vendor_id: backendItem.vendor_id || 0,
+        vendor_name: backendItem.vendor_name || 'Unknown Vendor',
+        vendor_city: backendItem.vendor_city || '',
+        gas_type: backendItem.gas_product_details?.gas_type,
+        cylinder_size: backendItem.gas_product_details?.cylinder_size,
+        price_with_cylinder: backendItem.gas_product_details?.price_with_cylinder,
+        price_without_cylinder: backendItem.gas_product_details?.price_without_cylinder,
+        stock_quantity: backendItem.gas_product_details?.stock_quantity,
+        is_available: backendItem.gas_product_details?.is_available
+      })).filter(item => item.id !== 0);
+      } else {
+        // Only local has items or both empty - use local
+        mergedItems = state.items;
+      }
+
+      dispatch({ 
+        type: 'SYNC_SUCCESS', 
+        payload: { 
+          items: mergedItems,
+          lastSynced: new Date().toISOString()
         }
+      });
+      
+      console.log('✅ Cart synced with backend');
+      
+    } catch (error) {
+      console.error('❌ Failed to sync cart with backend:', error);
+      // Don't show error toast for sync failures to avoid annoying users
+    } finally {
+      dispatch({ type: 'SET_SYNCING', payload: false });
+    }
+  };
+
+  // 2. Enhanced Vendor Validation
+  const validateVendor = async (vendorId: number): Promise<boolean> => {
+    try {
+      const vendor = await vendorsApiService.getVendor(vendorId);
+      return vendor.is_active && vendor.is_verified;
+    } catch {
+      return false;
+    }
+  };
+
+  // 3. Stock Validation
+  const checkStock = (item: CartItem, quantity: number): boolean => {
+    if (item.stock_quantity !== undefined && quantity > item.stock_quantity) {
+      toast.error(`Only ${item.stock_quantity} units of ${item.name} available`);
+      return false;
+    }
+    
+    if (item.is_available === false) {
+      toast.error(`${item.name} is currently unavailable`);
+      return false;
+    }
+    
+    return true;
+  };
+
+  // Cart Validation for Checkout
+  const validateCartForCheckout = (): { isValid: boolean; issues: string[] } => {
+    const issues: string[] = [];
+    
+    if (state.items.length === 0) {
+      issues.push('Cart is empty');
+    }
+    
+    if (!cartUtils.hasSingleVendor(state.items)) {
+      issues.push('Cart contains items from multiple vendors');
+    }
+    
+    // Check product availability and stock
+    state.items.forEach(item => {
+      if (!item.is_available) {
+        issues.push(`${item.name} is no longer available`);
+      }
+      if (item.stock_quantity !== undefined && item.quantity > item.stock_quantity) {
+        issues.push(`Only ${item.stock_quantity} units of ${item.name} available`);
+      }
+    });
+    
+    return {
+      isValid: issues.length === 0,
+      issues
+    };
+  };
+
+  // Load cart from localStorage on mount
+  useEffect(() => {
+    try {
+      const savedCart = localStorage.getItem('zeno-cart');
+      if (savedCart) {
+        const cartData = JSON.parse(savedCart);
+        dispatch({ type: 'LOAD_CART', payload: { ...cartData, isSyncing: false } });
+      }
+    } catch (error) {
+      console.error('Error loading cart from localStorage:', error);
+    }
+  }, []);
+
+  // Save cart to localStorage whenever state changes
+  useEffect(() => {
+    try {
+      localStorage.setItem('zeno-cart', JSON.stringify(state));
+    } catch (error) {
+      console.error('Error saving cart to localStorage:', error);
+    }
+  }, [state]);
+
+  // Sync with backend on mount if authenticated
+  useEffect(() => {
+    if (isAuthenticated() && isOnline) {
+      syncWithBackend();
+    }
+  }, [isAuthenticated(), isOnline]);
+
+  // Track online/offline status
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      toast.success('Back online - cart will sync');
+      if (isAuthenticated()) {
+        syncWithBackend();
       }
     };
-
-    initializeCart();
+    
+    const handleOffline = () => {
+      setIsOnline(false);
+      toast.warning('You are offline - cart changes will sync when back online');
+    };
+    
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, []);
 
   const value: CartContextType = {
-    cart,
-    loading,
-    addToCart,
-    updateCartItem,
-    removeFromCart,
+    state,
+    addItem,
+    removeItem,
+    updateQuantity,
     clearCart,
-    refreshCart,
-    createOrderFromCart,
-    // ✅ ADDED: Computed properties
-    cartItemCount,
-    cartTotal
+    getItemQuantity,
+    syncWithBackend,
+    validateCartForCheckout,
+    validateVendor,
+    checkStock,
+    isOnline,
   };
 
   return (
     <CartContext.Provider value={value}>
-      <NetworkDebugger />
       {children}
     </CartContext.Provider>
   );
 };
 
-// Custom hook to use cart context
+// Hook for using cart context
 export const useCart = (): CartContextType => {
   const context = useContext(CartContext);
   if (context === undefined) {
@@ -575,4 +463,56 @@ export const useCart = (): CartContextType => {
   return context;
 };
 
+// Utility functions
+export const cartUtils = {
+  // Calculate total price for a specific vendor
+  calculateVendorTotal: (items: CartItem[], vendorId: number): number => {
+    return items
+      .filter(item => item.vendor_id === vendorId)
+      .reduce((total, item) => total + (item.price * item.quantity), 0);
+  },
+
+  // Check if all items are from the same vendor
+  hasSingleVendor: (items: CartItem[]): boolean => {
+    if (items.length === 0) return true;
+    const firstVendorId = items[0].vendor_id;
+    return items.every(item => item.vendor_id === firstVendorId);
+  },
+
+  // Get the vendor ID for the cart (returns null if mixed vendors)
+  getCartVendorId: (items: CartItem[]): number | null => {
+    if (items.length === 0) return null;
+    const firstVendorId = items[0].vendor_id;
+    return items.every(item => item.vendor_id === firstVendorId) ? firstVendorId : null;
+  },
+
+  // Format price for display
+  formatPrice: (price: number): string => {
+    return `KSh ${price.toLocaleString()}`;
+  },
+
+  // Validate if item can be added to cart (vendor check)
+  canAddToCart: (currentItems: CartItem[], newItem: CartItem): boolean => {
+    if (currentItems.length === 0) return true;
+    const currentVendorId = currentItems[0].vendor_id;
+    return currentVendorId === newItem.vendor_id;
+  },
+
+  // Convert cart items to order payload
+  convertToOrderPayload: (items: CartItem[]) => {
+    return {
+      items: items.map(item => ({
+        item_type: 'gas_product',
+        product_id: item.id,
+        quantity: item.quantity,
+        unit_price: item.price,
+        include_cylinder: !!item.price_with_cylinder
+      })),
+      vendor_id: items[0]?.vendor_id,
+      total_amount: items.reduce((sum, item) => sum + (item.price * item.quantity), 0)
+    };
+  }
+};
+
+export type { CartContextType };
 export default CartContext;

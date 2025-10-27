@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { gasProductsAPI } from '@/services/api';
+import { gasProductsAPI } from '@/services/vendorService';
 import { 
   Package, 
   Plus, 
@@ -29,7 +29,7 @@ const VendorProducts = () => {
     queryKey: ['vendor-products'],
     queryFn: async () => {
       const response = await gasProductsAPI.getMyProducts();
-      return response.data; // ✅ Access the data property
+      return response; // ✅ REMOVED .data - response is already the data
     },
   });
 

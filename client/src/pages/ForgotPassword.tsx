@@ -40,7 +40,8 @@ const ForgotPassword = () => {
     setLoading(true);
 
     try {
-      const response = await authAPI.forgotPassword(phoneNumber);
+      // ✅ FIXED: Pass as object instead of string
+      const response = await authAPI.forgotPassword({ phone_number: phoneNumber });
       toast.success(response.data.message || "Reset code sent to your phone");
       setStep("code");
     } catch (error: any) {
@@ -111,7 +112,8 @@ const ForgotPassword = () => {
     setLoading(true);
     
     try {
-      const response = await authAPI.forgotPassword(phoneNumber);
+      // ✅ FIXED: Pass as object instead of string
+      const response = await authAPI.forgotPassword({ phone_number: phoneNumber });
       toast.success("Reset code sent again");
     } catch (error: any) {
       toast.error(error.response?.data?.error || "Failed to resend code");

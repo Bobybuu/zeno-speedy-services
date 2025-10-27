@@ -1,13 +1,29 @@
+// src/pages/ProviderDetail.tsx - REFACTORED VERSION
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, MapPin, Phone, Mail, Clock, Star, CheckCircle2, Globe, Loader2 } from "lucide-react";
+import { 
+  ArrowLeft, 
+  MapPin, 
+  Phone, 
+  Mail, 
+  Clock, 
+  Star, 
+  CheckCircle2, 
+  Globe, 
+  Loader2,
+  Package,
+  Shield,
+  Truck
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import BottomNav from "@/components/BottomNav";
 import Map from "@/components/Map";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { vendorsAPI } from "@/services/api";
+import { vendorsAPI } from "@/services/vendorService";
+
 
 // Interfaces
 interface OperatingHours {
@@ -56,95 +72,87 @@ interface Vendor {
 
 // Helper functions
 const getServicesByBusinessType = (businessType: string): string[] => {
-  switch (businessType) {
-    case 'gas_station':
-      return [
-        "6kg Gas Cylinders",
-        "13kg Gas Cylinders", 
-        "Gas Refills",
-        "New Cylinder Sales",
-        "Free Delivery (orders above KSh 2000)",
-        "Emergency Service Available"
-      ];
-    case 'mechanic':
-      return [
-        "Engine Repair",
-        "Brake Services",
-        "Oil Change",
-        "Tire Replacement",
-        "Electrical System Repair",
-        "24/7 Emergency Service"
-      ];
-    case 'hospital':
-      return [
-        "Emergency Care",
-        "Outpatient Services",
-        "Laboratory Tests",
-        "Pharmacy",
-        "Ambulance Services",
-        "24/7 Emergency Care"
-      ];
-    case 'roadside_assistance':
-      return [
-        "Tire Change",
-        "Jump Start",
-        "Fuel Delivery",
-        "Lockout Service",
-        "Towing",
-        "24/7 Roadside Assistance"
-      ];
-    default:
-      return [
-        "Professional Services",
-        "Quality Assurance",
-        "Customer Support",
-        "Emergency Services"
-      ];
-  }
+  const services = {
+    'gas_station': [
+      "6kg Gas Cylinders",
+      "13kg Gas Cylinders", 
+      "Gas Refills",
+      "New Cylinder Sales",
+      "Free Delivery (orders above KSh 2000)",
+      "Emergency Service Available"
+    ],
+    'mechanic': [
+      "Engine Repair",
+      "Brake Services",
+      "Oil Change",
+      "Tire Replacement",
+      "Electrical System Repair",
+      "24/7 Emergency Service"
+    ],
+    'hospital': [
+      "Emergency Care",
+      "Outpatient Services",
+      "Laboratory Tests",
+      "Pharmacy",
+      "Ambulance Services",
+      "24/7 Emergency Care"
+    ],
+    'roadside_assistance': [
+      "Tire Change",
+      "Jump Start",
+      "Fuel Delivery",
+      "Lockout Service",
+      "Towing",
+      "24/7 Roadside Assistance"
+    ]
+  };
+  
+  return services[businessType as keyof typeof services] || [
+    "Professional Services",
+    "Quality Assurance",
+    "Customer Support",
+    "Emergency Services"
+  ];
 };
 
 const getTermsByBusinessType = (businessType: string): string[] => {
-  switch (businessType) {
-    case 'gas_station':
-      return [
-        "Payment on delivery accepted",
-        "Refund available for defective cylinders within 24 hours",
-        "Delivery within 2 hours for urgent orders",
-        "Minimum order: KSh 500",
-        "Cylinders must be returned within 30 days for deposit refund"
-      ];
-    case 'mechanic':
-      return [
-        "Payment upon completion of service",
-        "Warranty on parts and labor",
-        "Free estimates provided",
-        "24/7 emergency service available",
-        "Quality guaranteed on all repairs"
-      ];
-    case 'hospital':
-      return [
-        "Emergency cases prioritized",
-        "Insurance accepted",
-        "Payment plans available",
-        "24/7 emergency services",
-        "Confidentiality guaranteed"
-      ];
-    case 'roadside_assistance':
-      return [
-        "24/7 availability",
-        "Response within 30 minutes",
-        "Transparent pricing",
-        "Multiple payment options",
-        "Service area coverage clearly defined"
-      ];
-    default:
-      return [
-        "Professional service guaranteed",
-        "Customer satisfaction priority",
-        "Transparent pricing",
-        "Quality assurance"
-      ];
-  }
+  const terms = {
+    'gas_station': [
+      "Payment on delivery accepted",
+      "Refund available for defective cylinders within 24 hours",
+      "Delivery within 2 hours for urgent orders",
+      "Minimum order: KSh 500",
+      "Cylinders must be returned within 30 days for deposit refund"
+    ],
+    'mechanic': [
+      "Payment upon completion of service",
+      "Warranty on parts and labor",
+      "Free estimates provided",
+      "24/7 emergency service available",
+      "Quality guaranteed on all repairs"
+    ],
+    'hospital': [
+      "Emergency cases prioritized",
+      "Insurance accepted",
+      "Payment plans available",
+      "24/7 emergency services",
+      "Confidentiality guaranteed"
+    ],
+    'roadside_assistance': [
+      "24/7 availability",
+      "Response within 30 minutes",
+      "Transparent pricing",
+      "Multiple payment options",
+      "Service area coverage clearly defined"
+    ]
+  };
+  
+  return terms[businessType as keyof typeof terms] || [
+    "Professional service guaranteed",
+    "Customer satisfaction priority",
+    "Transparent pricing",
+    "Quality assurance"
+  ];
 };
 
 const formatOperatingHours = (operatingHours: OperatingHours[]): string => {
@@ -183,6 +191,17 @@ const formatOperatingHours = (operatingHours: OperatingHours[]): string => {
   return formatted.join('; ');
 };
 
+const getBusinessEmoji = (businessType: string) => {
+  const emojis = {
+    'gas_station': '🔥',
+    'mechanic': '🔧',
+    'hospital': '🏥',
+    'roadside_assistance': '🛟'
+  };
+  
+  return emojis[businessType as keyof typeof emojis] || '🏢';
+};
+
 const ProviderDetail = () => {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -195,59 +214,46 @@ const ProviderDetail = () => {
     if (!vendor) return;
 
     // Route based on business type
-    switch (vendor.business_type) {
-      case 'gas_station':
-        navigate(`/services/gas/providers/${vendor.id}`, {
-          state: { vendor }
-        });
-        break;
-      case 'mechanic':
-      case 'roadside_assistance':
-        navigate(`/services/roadside/providers/${vendor.id}`, {
-          state: { vendor }
-        });
-        break;
-      case 'hospital':
-        navigate(`/services/oxygen/providers/${vendor.id}`, {
-          state: { vendor }
-        });
-        break;
-      default:
-        // Fallback to generic vendor page
-        navigate(`/vendor/${vendor.id}`, {
-          state: { vendor }
-        });
-        break;
-    }
+    const routes = {
+      'gas_station': `/services/gas/providers/${vendor.id}`,
+      'mechanic': `/services/roadside/providers/${vendor.id}`,
+      'roadside_assistance': `/services/roadside/providers/${vendor.id}`,
+      'hospital': `/services/oxygen/providers/${vendor.id}`
+    };
+    
+    const route = routes[vendor.business_type as keyof typeof routes] || `/vendor/${vendor.id}`;
+    
+    navigate(route, { state: { vendor } });
   };
 
+  // Fetch vendor details
   useEffect(() => {
     const fetchVendorDetails = async () => {
+      if (!id) {
+        setError("No vendor ID provided");
+        setLoading(false);
+        return;
+      }
+
       try {
         setLoading(true);
         setError(null);
         
-        console.log("Fetching vendor with ID:", id);
+        console.log("🔄 Fetching vendor with ID:", id);
         
         // Use the vendorsAPI service
-        const response = await vendorsAPI.getVendor(Number(id));
-        console.log("Vendor API response:", response);
-        console.log("Vendor data:", response.data);
+        const vendorData = await vendorsAPI.getVendor(Number(id));
+        console.log("✅ Vendor data received:", vendorData);
         
-        setVendor(response.data);
+        setVendor(vendorData as any);
         
       } catch (err: any) {
-        console.error("Error fetching vendor details:", err);
+        console.error("❌ Error fetching vendor details:", err);
         
-        // Detailed error logging
-        if (err.response) {
-          console.error("Response status:", err.response.status);
-          console.error("Response data:", err.response.data);
-        }
-        
+        // Handle different error types
         if (err.response?.status === 404) {
           setError("Vendor not found");
-          toast.error("Vendor not found. It may have been removed or doesn't exist.");
+          toast.error("Vendor not found. It may have been removed.");
         } else if (err.response?.status === 403) {
           setError("Access denied");
           toast.error("You don't have permission to view this vendor.");
@@ -260,19 +266,14 @@ const ProviderDetail = () => {
         }
         
         // Fallback to mock data for demo
-        console.log("Using mock data as fallback");
+        console.log("🔄 Using mock data as fallback");
         setVendor(getMockVendorData());
       } finally {
         setLoading(false);
       }
     };
 
-    if (id) {
-      fetchVendorDetails();
-    } else {
-      setError("No vendor ID provided");
-      setLoading(false);
-    }
+    fetchVendorDetails();
   }, [id]);
 
   // Mock data fallback
@@ -280,7 +281,7 @@ const ProviderDetail = () => {
     id: id || "1",
     business_name: "Nairobi Gas Center",
     business_type: "gas_station",
-    description: "Your trusted partner for quality gas products and reliable service. We provide safe and efficient gas solutions for homes and businesses.",
+    description: "Your trusted partner for quality gas products and reliable service. We provide safe and efficient gas solutions for homes and businesses across Nairobi.",
     latitude: -1.286389,
     longitude: 36.817223,
     address: "Moi Avenue, Nairobi CBD",
@@ -309,7 +310,7 @@ const ProviderDetail = () => {
         customer_name: "John Kamau",
         customer_username: "johnk",
         rating: 5,
-        comment: "Excellent service and fast delivery! The gas quality is top-notch.",
+        comment: "Excellent service and fast delivery! The gas quality is top-notch and the cylinder was delivered within 1 hour.",
         created_at: "2024-01-15T10:30:00Z"
       },
       {
@@ -317,28 +318,26 @@ const ProviderDetail = () => {
         customer_name: "Mary Wanjiku",
         customer_username: "maryw",
         rating: 4,
-        comment: "Good prices and reliable service. Will definitely order again.",
+        comment: "Good prices and reliable service. The delivery was prompt and the staff was professional. Will definitely order again!",
         created_at: "2024-01-10T14:20:00Z"
+      },
+      {
+        id: 3,
+        customer_name: "Peter Maina",
+        customer_username: "peterm",
+        rating: 5,
+        comment: "Best gas service in Nairobi! Always available when I need emergency refills. Highly recommended!",
+        created_at: "2024-01-05T16:45:00Z"
       }
     ],
     owner_name: "David Mwangi",
     owner_email: "david@nairobigas.com",
-    delivery_radius_km: 10,
+    delivery_radius_km: 15,
     min_order_amount: 500,
     delivery_fee: 200
   });
 
-  // Get appropriate emoji based on business type
-  const getBusinessEmoji = (businessType: string) => {
-    switch (businessType) {
-      case 'gas_station': return '🔥';
-      case 'mechanic': return '🔧';
-      case 'hospital': return '🏥';
-      case 'roadside_assistance': return '🛟';
-      default: return '🏢';
-    }
-  };
-
+  // Loading state
   if (loading) {
     return (
       <div className="min-h-screen bg-background pb-20">
@@ -366,6 +365,7 @@ const ProviderDetail = () => {
     );
   }
 
+  // Error state
   if (error && !vendor) {
     return (
       <div className="min-h-screen bg-background pb-20">
@@ -383,11 +383,18 @@ const ProviderDetail = () => {
           </div>
         </header>
         <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <p className="text-destructive mb-4">{error}</p>
-            <Button onClick={() => window.location.reload()}>
-              Try Again
-            </Button>
+          <div className="text-center p-4 max-w-md">
+            <div className="text-6xl mb-4">❌</div>
+            <h3 className="text-lg font-semibold mb-2">Unable to Load Vendor</h3>
+            <p className="text-muted-foreground mb-6">{error}</p>
+            <div className="space-y-3">
+              <Button onClick={() => window.location.reload()}>
+                Try Again
+              </Button>
+              <Button variant="outline" onClick={() => navigate('/services')}>
+                Browse Services
+              </Button>
+            </div>
           </div>
         </div>
         <BottomNav />
@@ -422,7 +429,7 @@ const ProviderDetail = () => {
       <div className="space-y-4">
         {/* Vendor Header */}
         <Card className="rounded-none border-x-0">
-          <div className="p-6">
+          <CardContent className="p-6">
             <div className="flex items-start justify-between mb-4">
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-1">
@@ -434,7 +441,7 @@ const ProviderDetail = () => {
                     </Badge>
                   )}
                   {!vendor!.is_active && (
-                    <Badge variant="secondary" className="bg-red-100 text-red-800">
+                    <Badge variant="destructive" className="bg-red-100 text-red-800">
                       Inactive
                     </Badge>
                   )}
@@ -456,111 +463,123 @@ const ProviderDetail = () => {
 
             <div className="flex items-center gap-2 text-muted-foreground mb-2">
               <MapPin className="h-4 w-4" />
-              <span className="text-sm">{vendor!.address}, {vendor!.city}, {vendor!.country}</span>
+              <span className="text-sm">{vendor!.address}, {vendor!.city}</span>
             </div>
 
             <p className="text-sm text-muted-foreground mt-3">
               {vendor!.description}
             </p>
-          </div>
+          </CardContent>
         </Card>
 
         {/* Location Map */}
         {vendor!.latitude && vendor!.longitude && (
           <Card className="rounded-none border-x-0 overflow-hidden">
-            <div className="h-[250px]">
-              <Map 
-                providers={[{
-                  id: Number(vendor!.id),
-                  name: vendor!.business_name,
-                  location: vendor!.address,
-                  price: "View Services",
-                  coords: [Number(vendor!.latitude), Number(vendor!.longitude)] as [number, number]
-                }]} 
-                userLocation={null}
-              />
-            </div>
+            <CardContent className="p-0">
+              <div className="h-[200px]">
+                <Map 
+                  providers={[{
+                    id: Number(vendor!.id),
+                    name: vendor!.business_name,
+                    location: vendor!.address,
+                    price: "View Services",
+                    coords: [Number(vendor!.latitude), Number(vendor!.longitude)] as [number, number]
+                  }]} 
+                  userLocation={null}
+                />
+              </div>
+              <div className="p-4 bg-muted/50">
+                <p className="text-sm text-muted-foreground">
+                  📍 {vendor!.address}, {vendor!.city}, {vendor!.country}
+                </p>
+              </div>
+            </CardContent>
           </Card>
         )}
 
         {/* Contact Information */}
         <Card className="mx-4">
-          <div className="p-4">
-            <h3 className="font-semibold mb-3">Contact Information</h3>
-            <div className="space-y-3">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                  <MapPin className="h-5 w-5 text-primary" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium">Address</p>
-                  <p className="text-sm text-muted-foreground">{vendor!.address}</p>
-                </div>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg">Contact Information</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                <MapPin className="h-5 w-5 text-primary" />
               </div>
+              <div className="flex-1">
+                <p className="text-sm font-medium">Address</p>
+                <p className="text-sm text-muted-foreground">{vendor!.address}</p>
+              </div>
+            </div>
 
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                <Phone className="h-5 w-5 text-primary" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-medium">Phone</p>
+                <a href={`tel:${vendor!.contact_number}`} className="text-sm text-primary">
+                  {vendor!.contact_number}
+                </a>
+              </div>
+            </div>
+
+            {vendor!.email && (
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                  <Phone className="h-5 w-5 text-primary" />
+                  <Mail className="h-5 w-5 text-primary" />
                 </div>
                 <div className="flex-1">
-                  <p className="text-sm font-medium">Phone</p>
-                  <a href={`tel:${vendor!.contact_number}`} className="text-sm text-primary">
-                    {vendor!.contact_number}
+                  <p className="text-sm font-medium">Email</p>
+                  <a href={`mailto:${vendor!.email}`} className="text-sm text-primary">
+                    {vendor!.email}
                   </a>
                 </div>
               </div>
+            )}
 
-              {vendor!.email && (
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                    <Mail className="h-5 w-5 text-primary" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium">Email</p>
-                    <a href={`mailto:${vendor!.email}`} className="text-sm text-primary">
-                      {vendor!.email}
-                    </a>
-                  </div>
-                </div>
-              )}
-
-              {vendor!.website && (
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                    <Globe className="h-5 w-5 text-primary" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium">Website</p>
-                    <a 
-                      href={vendor!.website} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="text-sm text-primary"
-                    >
-                      {vendor!.website}
-                    </a>
-                  </div>
-                </div>
-              )}
-
+            {vendor!.website && (
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                  <Clock className="h-5 w-5 text-primary" />
+                  <Globe className="h-5 w-5 text-primary" />
                 </div>
                 <div className="flex-1">
-                  <p className="text-sm font-medium">Opening Hours</p>
-                  <p className="text-sm text-muted-foreground">{formattedHours}</p>
+                  <p className="text-sm font-medium">Website</p>
+                  <a 
+                    href={vendor!.website} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-sm text-primary"
+                  >
+                    {vendor!.website}
+                  </a>
                 </div>
               </div>
+            )}
+
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                <Clock className="h-5 w-5 text-primary" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-medium">Opening Hours</p>
+                <p className="text-sm text-muted-foreground">{formattedHours}</p>
+              </div>
             </div>
-          </div>
+          </CardContent>
         </Card>
 
         {/* Services Offered */}
         <Card className="mx-4">
-          <div className="p-4">
-            <h3 className="font-semibold mb-3">Services Offered</h3>
-            <div className="space-y-2">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Package className="h-5 w-5" />
+              Services Offered
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
               {services.map((service, index) => (
                 <div key={index} className="flex items-center gap-2">
                   <CheckCircle2 className="h-4 w-4 text-primary flex-shrink-0" />
@@ -568,18 +587,44 @@ const ProviderDetail = () => {
                 </div>
               ))}
             </div>
-          </div>
+          </CardContent>
+        </Card>
+
+        {/* Delivery Information */}
+        <Card className="mx-4">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Truck className="h-5 w-5" />
+              Delivery Information
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Delivery Radius</span>
+              <span>{vendor!.delivery_radius_km || 10} km</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Minimum Order</span>
+              <span>KSh {(vendor!.min_order_amount || 0).toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Delivery Fee</span>
+              <span>KSh {(vendor!.delivery_fee || 200).toLocaleString()}</span>
+            </div>
+          </CardContent>
         </Card>
 
         {/* Recent Reviews */}
         {vendor!.reviews && vendor!.reviews.length > 0 && (
           <Card className="mx-4">
-            <div className="p-4">
-              <h3 className="font-semibold mb-3">Recent Reviews</h3>
-              <div className="space-y-3">
-                {vendor!.reviews.slice(0, 3).map((review) => (
-                  <div key={review.id} className="border-b pb-3 last:border-0 last:pb-0">
-                    <div className="flex items-center gap-2 mb-2">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg">Customer Reviews</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {vendor!.reviews.slice(0, 3).map((review) => (
+                <div key={review.id} className="border-b pb-4 last:border-0 last:pb-0">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
                       <div className="flex items-center gap-1">
                         {[...Array(5)].map((_, i) => (
                           <Star
@@ -592,24 +637,29 @@ const ProviderDetail = () => {
                           />
                         ))}
                       </div>
-                      <span className="text-xs text-muted-foreground">
-                        {new Date(review.created_at).toLocaleDateString()}
-                      </span>
+                      <span className="text-sm font-medium">{review.customer_name}</span>
                     </div>
-                    <p className="text-sm font-medium mb-1">{review.customer_name}</p>
-                    <p className="text-sm text-muted-foreground">{review.comment}</p>
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(review.created_at).toLocaleDateString()}
+                    </span>
                   </div>
-                ))}
-              </div>
-            </div>
+                  <p className="text-sm text-muted-foreground">{review.comment}</p>
+                </div>
+              ))}
+            </CardContent>
           </Card>
         )}
 
         {/* Terms of Service */}
         <Card className="mx-4 mb-4">
-          <div className="p-4">
-            <h3 className="font-semibold mb-3">Terms of Service</h3>
-            <div className="space-y-2">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Shield className="h-5 w-5" />
+              Terms of Service
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
               {termsOfService.map((term, index) => (
                 <div key={index} className="flex items-start gap-2">
                   <Badge variant="outline" className="mt-0.5 flex-shrink-0">
@@ -619,16 +669,17 @@ const ProviderDetail = () => {
                 </div>
               ))}
             </div>
-          </div>
+          </CardContent>
         </Card>
 
         {/* Action Buttons */}
-        <div className="px-4 pb-4 space-y-2">
+        <div className="px-4 pb-4 space-y-3">
           <Button 
             className="w-full bg-secondary hover:bg-secondary/90"
             size="lg"
             onClick={handleBrowseServices}
           >
+            <Package className="h-5 w-5 mr-2" />
             Browse Services
           </Button>
           <div className="grid grid-cols-2 gap-2">

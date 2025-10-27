@@ -1,7 +1,7 @@
 // src/pages/vendor/AddProduct.tsx
 import React, { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { gasProductsAPI } from '@/services/api';
+import { gasProductsAPI } from '@/services/vendorService';
 import { useNavigate } from 'react-router-dom';
 import { 
   Package, 

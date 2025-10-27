@@ -1,7 +1,8 @@
+// src/pages/vendor/VendorSettings.tsx - COMPLETE FIXED VERSION
 import React, { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { vendorDashboardAPI, vendorPayoutsAPI, vendorsAPI } from '@/services/api';
+import { vendorDashboardAPI, vendorsAPI, vendorPayoutsAPI } from '@/services/vendorService';
 import { 
   Save,
   Building,
@@ -22,6 +23,18 @@ import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 
+// Define the payout form type to match the expected structure
+interface PayoutFormData {
+  payout_method: 'mpesa' | 'bank_transfer' | 'cash';
+  mobile_money_number: string;
+  mobile_money_name: string;
+  bank_name: string;
+  account_number: string;
+  account_name: string;
+  auto_payout: boolean;
+  payout_threshold: number;
+}
+
 const VendorSettings = () => {
   const { vendorProfile } = useAuth();
   const queryClient = useQueryClient();
@@ -31,13 +44,13 @@ const VendorSettings = () => {
     queryKey: ['vendor-payout-preferences'],
     queryFn: async () => {
       const response = await vendorPayoutsAPI.getPayoutPreferences();
-      return response.data; // ✅ Access the data property
+      return response;
     },
     enabled: !!vendorProfile,
   });
 
   const updateProfileMutation = useMutation({
-    mutationFn: (data: any) => vendorsAPI.updateVendor(vendorProfile?.id || 0, data), // ✅ Use vendorsAPI instead
+    mutationFn: (data: any) => vendorsAPI.updateVendor(vendorProfile?.id || 0, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['vendor-profile'] });
       toast.success('Profile updated successfully');
@@ -48,7 +61,7 @@ const VendorSettings = () => {
   });
 
   const updatePayoutMutation = useMutation({
-    mutationFn: (data: any) => vendorPayoutsAPI.updatePayoutPreference(payoutPreferences?.id || 0, data), // ✅ Add fallback for id
+    mutationFn: (data: any) => vendorPayoutsAPI.updatePayoutPreferences(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['vendor-payout-preferences'] });
       toast.success('Payout preferences updated');
@@ -61,7 +74,7 @@ const VendorSettings = () => {
   // Safely extract payout preferences data
   const payoutData = payoutPreferences || {
     id: 0,
-    payout_method: 'mpesa',
+    payout_method: 'mpesa' as const,
     mobile_money_number: '',
     mobile_money_name: '',
     bank_name: '',
@@ -85,7 +98,7 @@ const VendorSettings = () => {
     delivery_fee: vendorProfile?.delivery_fee || 0,
   });
 
-  const [payoutForm, setPayoutForm] = useState({
+  const [payoutForm, setPayoutForm] = useState<PayoutFormData>({
     payout_method: payoutData.payout_method || 'mpesa',
     mobile_money_number: payoutData.mobile_money_number || '',
     mobile_money_name: payoutData.mobile_money_name || '',
@@ -104,6 +117,22 @@ const VendorSettings = () => {
   const handlePayoutSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     updatePayoutMutation.mutate(payoutForm);
+  };
+
+  // Type-safe handler for payout method changes
+  const handlePayoutMethodChange = (method: 'mpesa' | 'bank_transfer' | 'cash') => {
+    setPayoutForm(prev => ({
+      ...prev,
+      payout_method: method
+    }));
+  };
+
+  // Type-safe handler for payout form changes
+  const handlePayoutFormChange = (field: keyof PayoutFormData, value: string | boolean | number) => {
+    setPayoutForm(prev => ({
+      ...prev,
+      [field]: value
+    }));
   };
 
   const tabs = [
@@ -367,7 +396,7 @@ const VendorSettings = () => {
                             name="payout_method"
                             value="mpesa"
                             checked={payoutForm.payout_method === 'mpesa'}
-                            onChange={(e) => setPayoutForm(prev => ({ ...prev, payout_method: e.target.value }))}
+                            onChange={() => handlePayoutMethodChange('mpesa')}
                             className="sr-only"
                           />
                           <div className={`p-4 border-2 rounded-lg cursor-pointer transition-colors ${
@@ -386,7 +415,7 @@ const VendorSettings = () => {
                             name="payout_method"
                             value="bank_transfer"
                             checked={payoutForm.payout_method === 'bank_transfer'}
-                            onChange={(e) => setPayoutForm(prev => ({ ...prev, payout_method: e.target.value }))}
+                            onChange={() => handlePayoutMethodChange('bank_transfer')}
                             className="sr-only"
                           />
                           <div className={`p-4 border-2 rounded-lg cursor-pointer transition-colors ${
@@ -410,7 +439,7 @@ const VendorSettings = () => {
                             <Input
                               id="mobile_money_number"
                               value={payoutForm.mobile_money_number}
-                              onChange={(e) => setPayoutForm(prev => ({ ...prev, mobile_money_number: e.target.value }))}
+                              onChange={(e) => handlePayoutFormChange('mobile_money_number', e.target.value)}
                               className="pl-10"
                               placeholder="+254712345678"
                               required
@@ -423,7 +452,7 @@ const VendorSettings = () => {
                           <Input
                             id="mobile_money_name"
                             value={payoutForm.mobile_money_name}
-                            onChange={(e) => setPayoutForm(prev => ({ ...prev, mobile_money_name: e.target.value }))}
+                            onChange={(e) => handlePayoutFormChange('mobile_money_name', e.target.value)}
                             placeholder="Name as registered with M-Pesa"
                             required
                           />
@@ -439,7 +468,7 @@ const VendorSettings = () => {
                             <Input
                               id="bank_name"
                               value={payoutForm.bank_name}
-                              onChange={(e) => setPayoutForm(prev => ({ ...prev, bank_name: e.target.value }))}
+                              onChange={(e) => handlePayoutFormChange('bank_name', e.target.value)}
                               required
                             />
                           </div>
@@ -449,7 +478,7 @@ const VendorSettings = () => {
                             <Input
                               id="account_number"
                               value={payoutForm.account_number}
-                              onChange={(e) => setPayoutForm(prev => ({ ...prev, account_number: e.target.value }))}
+                              onChange={(e) => handlePayoutFormChange('account_number', e.target.value)}
                               required
                             />
                           </div>
@@ -460,7 +489,7 @@ const VendorSettings = () => {
                           <Input
                             id="account_name"
                             value={payoutForm.account_name}
-                            onChange={(e) => setPayoutForm(prev => ({ ...prev, account_name: e.target.value }))}
+                            onChange={(e) => handlePayoutFormChange('account_name', e.target.value)}
                             required
                           />
                         </div>
@@ -475,7 +504,7 @@ const VendorSettings = () => {
                           type="checkbox"
                           id="auto_payout"
                           checked={payoutForm.auto_payout}
-                          onChange={(e) => setPayoutForm(prev => ({ ...prev, auto_payout: e.target.checked }))}
+                          onChange={(e) => handlePayoutFormChange('auto_payout', e.target.checked)}
                           className="rounded border-gray-300 text-secondary focus:ring-secondary"
                         />
                         <Label htmlFor="auto_payout" className="font-normal">
@@ -491,7 +520,7 @@ const VendorSettings = () => {
                             id="payout_threshold"
                             type="number"
                             value={payoutForm.payout_threshold}
-                            onChange={(e) => setPayoutForm(prev => ({ ...prev, payout_threshold: parseInt(e.target.value) }))}
+                            onChange={(e) => handlePayoutFormChange('payout_threshold', parseInt(e.target.value))}
                             className="pl-10"
                             min="100"
                             step="100"

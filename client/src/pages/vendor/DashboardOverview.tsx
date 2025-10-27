@@ -1,6 +1,6 @@
 import React from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { vendorDashboardAPI } from '@/services/api';
+import { vendorDashboardAPI } from '@/services/vendorService';
 import { useQuery } from '@tanstack/react-query';
 import { 
   Package, 
@@ -24,7 +24,7 @@ const DashboardOverview = () => {
     queryKey: ['vendor-dashboard'],
     queryFn: async () => {
       const response = await vendorDashboardAPI.getDashboardOverview();
-      return response.data; // ✅ Access the data property
+      return response; // ✅ REMOVED .data - response is already the data
     },
     enabled: !!vendorProfile,
   });
@@ -33,7 +33,7 @@ const DashboardOverview = () => {
     queryKey: ['vendor-stats'],
     queryFn: async () => {
       const response = await vendorDashboardAPI.getVendorStats();
-      return response.data; // ✅ Access the data property
+      return response; // ✅ REMOVED .data - response is already the data
     },
     enabled: !!vendorProfile,
   });

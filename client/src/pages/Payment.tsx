@@ -1,4 +1,4 @@
-// src/pages/Payment.tsx - Complete Fixed Version
+// src/pages/Payment.tsx - FIXED VERSION
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { ArrowLeft, CreditCard, Phone, Loader2, Shield, CheckCircle2, AlertTriangle } from "lucide-react";
@@ -10,6 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/components/ui/use-toast";
 import BottomNav from "@/components/BottomNav";
 import { useCart } from "@/context/CartContext";
+import { cartApiService } from "@/services/cartApi";
 
 interface OrderItem {
   id: number;
@@ -46,7 +47,9 @@ const Payment = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
-  const { createOrderFromCart, clearCart } = useCart();
+  
+  // ✅ FIXED: Use correct CartContext methods
+  const { clearCart } = useCart();
   
   const [phoneNumber, setPhoneNumber] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
@@ -77,11 +80,17 @@ const Payment = () => {
           console.log('🛒 Payment received order items:', state.orderItems);
           setOrderItems(state.orderItems);
           
-          // ✅ Use the CartContext function to create order
-          const orderData = await createOrderFromCart("Nairobi, Kenya");
-          setOrderId(orderData.id);
+          // ✅ FIXED: Use cartApiService to create order from cart
+          const orderResult = await cartApiService.createOrderFromCart({
+            shipping_address: "Nairobi, Kenya",
+            delivery_instructions: "Standard delivery",
+            payment_method: "mpesa",
+            customer_phone: phoneNumber || "254712345678"
+          });
           
-          console.log('✅ Order created for payment:', orderData);
+          setOrderId(orderResult.order.id);
+          
+          console.log('✅ Order created for payment:', orderResult.order);
         } else {
           setError('No items found for payment');
           toast({
@@ -127,7 +136,7 @@ const Payment = () => {
     };
 
     initializePayment();
-  }, [location.state, createOrderFromCart, navigate, toast]);
+  }, [location.state, navigate, toast]);
 
   // ✅ FIXED: Payment success handling function
   const handlePaymentSuccess = async (paymentId: number) => {
@@ -140,8 +149,8 @@ const Payment = () => {
         description: "Your payment has been confirmed",
       });
       
-      // ✅ Only clear cart AFTER successful payment and before navigation
-      await clearCart();
+      // ✅ Use clearCart from CartContext
+      clearCart();
       
       // Navigate to success page
       navigate("/order-confirmation", { 

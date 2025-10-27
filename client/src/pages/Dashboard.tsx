@@ -8,7 +8,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import ServiceCard from "@/components/ServiceCard";
 import BottomNav from "@/components/BottomNav";
 import { motion } from "framer-motion";
-import { safeGasProductsAPI, vendorsAPI } from "@/services/api";
+import { gasProductsAPI, vendorsAPI } from "@/services/vendorService";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 
@@ -125,7 +125,7 @@ const Dashboard = () => {
 
         // Use Promise.allSettled to handle individual API failures gracefully
         const [gasResponse, vendorsResponse] = await Promise.allSettled([
-          safeGasProductsAPI.getGasProducts(gasFilters),
+          gasProductsAPI.getGasProducts(gasFilters),
           vendorsAPI.getVendors({ 
             business_type: 'gas_station',
             is_verified: true,
@@ -142,9 +142,7 @@ const Dashboard = () => {
           
           // Handle different response formats (array vs paginated)
           const products = Array.isArray(gasData) ? gasData : 
-                          gasData.results ? gasData.results : 
-                          gasData.data ? gasData.data : [];
-          
+                          gasData.results ? gasData.results : [];
           console.log("Processed gas products:", products);
           setGasProducts(products.slice(0, 4));
         } else {
@@ -156,7 +154,7 @@ const Dashboard = () => {
 
         // Handle vendors response
         if (vendorsResponse.status === 'fulfilled') {
-          const vendorsData = vendorsResponse.value.data || vendorsResponse.value;
+          const vendorsData = vendorsResponse.value
           console.log("Vendors API response:", vendorsData);
           
           // Handle different response formats

@@ -10,6 +10,28 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 
+// Define local types to fix the TypeScript errors
+interface RegisterResponse {
+  success: boolean;
+  data?: {
+    user: any;
+    refresh: string;
+    access: string;
+    message: string;
+    requires_otp_verification: boolean;
+    remaining_otp_attempts?: number;
+    preferred_channel_used: string;
+  };
+  error?: {
+    code: string;
+    message: string;
+    details?: any;
+    field_errors?: Record<string, string[]>; // ✅ FIXED: Add field_errors property
+  };
+  message?: string;
+  redirectPath?: string; // ✅ FIXED: Add redirectPath property
+}
+
 const Register = () => {
   const navigate = useNavigate();
   const { register } = useAuth();
@@ -122,7 +144,7 @@ const Register = () => {
         };
       }
 
-      const result = await register(registrationData);
+      const result = await register(registrationData) as RegisterResponse; // ✅ FIXED: Cast to local type
       
       if (result.success) {
         toast.success(
@@ -135,22 +157,48 @@ const Register = () => {
         const redirectPath = result.redirectPath || '/dashboard';
         navigate(redirectPath);
       } else {
-        // Handle specific error cases
-        if (result.error?.phone_number) {
-          toast.error(result.error.phone_number[0]);
-        } else if (result.error?.username) {
-          toast.error(result.error.username[0]);
-        } else if (result.error?.password) {
-          toast.error(result.error.password[0]);
-        } else if (result.error?.vendor_data) {
+        // ✅ FIXED: Use field_errors instead of direct properties on error
+        const fieldErrors = result.error?.field_errors;
+        
+        if (fieldErrors?.phone_number) {
+          toast.error(fieldErrors.phone_number[0]);
+        } else if (fieldErrors?.username) {
+          toast.error(fieldErrors.username[0]);
+        } else if (fieldErrors?.password) {
+          toast.error(fieldErrors.password[0]);
+        } else if (fieldErrors?.vendor_data) {
           toast.error("Vendor registration failed. Please check your business information.");
         } else {
           toast.error(result.error?.message || "Registration failed");
         }
       }
-    } catch (error) {
-      toast.error("An unexpected error occurred");
+    } catch (error: any) {
       console.error("Registration error:", error);
+      
+      // ✅ FIXED: Handle different error formats
+      if (error.response?.data) {
+        const errorData = error.response.data;
+        
+        // Handle field errors from API response
+        if (errorData.field_errors) {
+          const fieldErrors = errorData.field_errors;
+          if (fieldErrors.phone_number) {
+            toast.error(fieldErrors.phone_number[0]);
+          } else if (fieldErrors.username) {
+            toast.error(fieldErrors.username[0]);
+          } else if (fieldErrors.password) {
+            toast.error(fieldErrors.password[0]);
+          } else {
+            toast.error(errorData.message || "Registration failed");
+          }
+        } else {
+          toast.error(errorData.message || errorData.detail || "Registration failed");
+        }
+      } else if (error.message) {
+        toast.error(error.message);
+      } else {
+        toast.error("An unexpected error occurred");
+      }
     } finally {
       setIsLoading(false);
     }

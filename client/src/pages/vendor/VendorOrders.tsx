@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ordersAPI } from '@/services/api';
+import { ordersAPI } from '@/services/vendorService';
 import { 
   ShoppingCart, 
   Search, 
@@ -25,11 +25,11 @@ const VendorOrders = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
-  const { data: orders, isLoading } = useQuery({
+  const { data: ordersResponse, isLoading } = useQuery({
     queryKey: ['vendor-orders', statusFilter],
     queryFn: async () => {
       const response = await ordersAPI.getVendorOrders({ status: statusFilter === 'all' ? undefined : statusFilter });
-      return response.data; // ✅ Access the data property
+      return response; // ✅ REMOVED .data - response is already the data
     },
   });
 
@@ -45,7 +45,8 @@ const VendorOrders = () => {
     },
   });
 
-  const filteredOrders = orders?.filter(order =>
+  // ✅ FIX: Access the results array from the response object
+  const filteredOrders = ordersResponse?.results?.filter(order =>
     order.id.toString().includes(searchTerm) ||
     order.customer_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     order.delivery_address?.toLowerCase().includes(searchTerm.toLowerCase())
