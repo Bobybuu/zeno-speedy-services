@@ -83,14 +83,14 @@ class VendorEarning(models.Model):
     vendor = models.ForeignKey('Vendor', on_delete=models.CASCADE, related_name='earnings')
     
     # ✅ FIXED: Added related_name to avoid conflict with Order.vendor_earnings field
-    #order = models.ForeignKey(
-        #'orders.Order', 
-        #on_delete=models.SET_NULL, 
-        #null=True, 
-        #blank=True, 
-        #related_name='vendor_earnings_relation'  # Changed from 'vendor_earnings'
-    #)
-    
+    order = models.ForeignKey(
+        'orders.Order', 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='vendor_earnings_relation'  # Changed from 'vendor_earnings'
+    )
+
     payment = models.ForeignKey('payments.Payment', on_delete=models.SET_NULL, null=True, blank=True, related_name='vendor_earnings_relation')
     
     # Earning Details
