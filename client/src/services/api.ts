@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { ApiConfig, LoginData, RegisterData, VerifyOTPData, UpdateOTPChannelData, ResendOTPData, ChangePasswordData, UpdateProfileData, ForgotPasswordData, VerifyResetCodeData, ResetPasswordData } from '@/types';
 
-const API_BASE_URL = 'https://api.zenoservices.co.ke';
+const API_BASE_URL = 'https://api.zenoservices.co.ke/api';
 
 const apiConfig: ApiConfig = {
   baseURL: API_BASE_URL,
