@@ -334,19 +334,7 @@ const Login = () => {
               </Link>
             </div>
             
-            {/* Additional help section */}
-            <div className="text-center">
-              <p className="text-xs text-muted-foreground">
-                Need help?{" "}
-                <Link 
-                  to="/contact" 
-                  className="text-secondary hover:underline"
-                  onClick={(e) => isLoading && e.preventDefault()}
-                >
-                  Contact support
-                </Link>
-              </p>
-            </div>
+            
           </div>
         </Card>
       </motion.div>
