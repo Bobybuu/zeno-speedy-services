@@ -11,26 +11,29 @@ export default defineConfig(({ mode }) => ({
   },
   plugins: [
     react(),
-    mode === "development" && componentTagger()
+    mode === "development" && componentTagger(),
   ].filter(Boolean),
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
   },
-  // Add build configuration for SPA deployment
+  // 
   build: {
     outDir: "dist",
-    sourcemap: true,
+    sourcemap: mode === "development", // Only sourcemap in dev
     rollupOptions: {
       output: {
         manualChunks: {
           vendor: ["react", "react-dom"],
           ui: ["@radix-ui/react-dialog", "@radix-ui/react-toast"]
-        }
+        },
+        // 
+        chunkFileNames: "assets/[name]-[hash].js",
+        entryFileNames: "assets/[name]-[hash].js",
+        assetFileNames: "assets/[name]-[hash].[ext]"
       }
     }
   },
-  // Ensure proper base path for deployment
-  base: "./",
+  base: "/",
 }));
