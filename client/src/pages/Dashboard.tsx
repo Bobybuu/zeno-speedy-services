@@ -100,12 +100,96 @@ const Dashboard = () => {
     }
   }, []);
 
+  // Enhanced fetch function with better debugging
+  const fetchVendorsWithFallback = async () => {
+    try {
+      console.log("🔄 Attempting to fetch vendors...");
+      
+      // Try multiple approaches to get vendors
+      let vendors: Vendor[] = [];
+
+      // Approach 1: Try with location-based filters
+      if (userLocation && userLocation[0] && userLocation[1]) {
+        try {
+          console.log("📍 Trying nearby vendors API...");
+          const nearbyVendors = await vendorsAPI.getNearbyVendors(
+            userLocation[0], 
+            userLocation[1], 
+            10,
+            'gas_station'
+          );
+          console.log("📍 Nearby vendors result:", nearbyVendors);
+          if (Array.isArray(nearbyVendors) && nearbyVendors.length > 0) {
+            vendors = nearbyVendors;
+          }
+        } catch (nearbyError) {
+          console.log("📍 Nearby vendors API failed, trying regular API...");
+        }
+      }
+
+      // Approach 2: Try regular vendors API
+      if (vendors.length === 0) {
+        try {
+          console.log("🏪 Trying regular vendors API...");
+          const vendorsResponse = await vendorsAPI.getVendors({ 
+            is_verified: true,
+            is_active: true,
+            business_type: 'gas_station'
+          });
+          console.log("🏪 Regular vendors API response:", vendorsResponse);
+          
+          // Handle different response formats
+          if (Array.isArray(vendorsResponse)) {
+            vendors = vendorsResponse;
+          } else if (vendorsResponse && Array.isArray(vendorsResponse.results)) {
+            vendors = vendorsResponse.results;
+          } else if (vendorsResponse && Array.isArray(vendorsResponse)) {
+            vendors = vendorsResponse;
+          }
+        } catch (regularError) {
+          console.error("🏪 Regular vendors API failed:", regularError);
+        }
+      }
+
+      // Approach 3: Try without any filters as last resort
+      if (vendors.length === 0) {
+        try {
+          console.log("🔧 Trying vendors API without filters...");
+          const allVendors = await vendorsAPI.getVendors();
+          console.log("🔧 Unfiltered vendors response:", allVendors);
+          
+          if (Array.isArray(allVendors)) {
+            vendors = allVendors;
+          } else if (allVendors && Array.isArray(allVendors.results)) {
+            vendors = allVendors.results;
+          }
+        } catch (unfilteredError) {
+          console.error("🔧 Unfiltered vendors API failed:", unfilteredError);
+        }
+      }
+
+      // Final fallback to mock data
+      if (vendors.length === 0) {
+        console.log("🔄 No vendors from API, using mock data");
+        vendors = getMockVendors();
+        toast.info("Showing demo vendor data");
+      }
+
+      console.log(`✅ Final vendors count: ${vendors.length}`);
+      return vendors.slice(0, 4);
+
+    } catch (error) {
+      console.error("❌ All vendor fetch attempts failed:", error);
+      return getMockVendors().slice(0, 4);
+    }
+  };
+
   // Fetch dashboard data
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
         setLoading(true);
-        console.log("Fetching dashboard data...");
+        console.log("🚀 Starting dashboard data fetch...");
 
         // Prepare filters for gas products
         const gasFilters: any = {
@@ -118,69 +202,60 @@ const Dashboard = () => {
           gasFilters.lat = userLocation[0];
           gasFilters.lng = userLocation[1];
           gasFilters.radius = 10;
-          console.log("Using location filters:", gasFilters);
+          console.log("📍 Using location filters for gas products:", gasFilters);
         } else {
-          console.log("No location available, fetching all available products");
+          console.log("🌐 No location available, fetching all available products");
         }
 
-        // Use Promise.allSettled to handle individual API failures gracefully
-        const [gasResponse, vendorsResponse] = await Promise.allSettled([
+        // Fetch gas products and vendors in parallel with better error handling
+        const [gasProductsResult, vendorsResult] = await Promise.allSettled([
           gasProductsAPI.getGasProducts(gasFilters),
-          vendorsAPI.getVendors({ 
-            business_type: 'gas_station',
-            is_verified: true,
-            is_active: true 
-          })
+          fetchVendorsWithFallback()
         ]);
 
-        console.log("API responses:", { gasResponse, vendorsResponse });
+        console.log("📊 All API calls completed:", {
+          gasProducts: gasProductsResult.status,
+          vendors: vendorsResult.status
+        });
 
         // Handle gas products response
-        if (gasResponse.status === 'fulfilled') {
-          const gasData = gasResponse.value;
-          console.log("Gas products API response:", gasData);
+        if (gasProductsResult.status === 'fulfilled') {
+          const gasData = gasProductsResult.value;
+          console.log("🔥 Gas products API response:", gasData);
           
-          // Handle different response formats (array vs paginated)
           const products = Array.isArray(gasData) ? gasData : 
-                          gasData.results ? gasData.results : [];
-          console.log("Processed gas products:", products);
+                          gasData?.results ? gasData.results : [];
+          console.log(`🔥 Processed ${products.length} gas products`);
           setGasProducts(products.slice(0, 4));
         } else {
-          console.error("Failed to fetch gas products:", gasResponse.reason);
-          // Use fallback mock data for gas products
+          console.error("❌ Failed to fetch gas products:", gasProductsResult.reason);
           setGasProducts(getMockGasProducts());
           toast.warning("Using demo gas products data");
         }
 
         // Handle vendors response
-        if (vendorsResponse.status === 'fulfilled') {
-          const vendorsData = vendorsResponse.value
-          console.log("Vendors API response:", vendorsData);
-          
-          // Handle different response formats
-          const vendors = Array.isArray(vendorsData) ? vendorsData : 
-                         vendorsData.results ? vendorsData.results : [];
-          
-          console.log("Processed vendors:", vendors);
-          setRecentVendors(vendors.slice(0, 4));
+        if (vendorsResult.status === 'fulfilled') {
+          const vendorsData = vendorsResult.value;
+          console.log(`🏪 Setting ${vendorsData.length} vendors to state`);
+          setRecentVendors(vendorsData);
         } else {
-          console.error("Failed to fetch vendors:", vendorsResponse.reason);
-          // Use fallback mock data for vendors
-          setRecentVendors(getMockVendors());
+          console.error("❌ Failed to fetch vendors:", vendorsResult.reason);
+          setRecentVendors(getMockVendors().slice(0, 4));
           toast.warning("Using demo vendors data");
         }
 
       } catch (error: any) {
-        console.error("Error in fetchDashboardData:", error);
+        console.error("💥 Error in fetchDashboardData:", error);
         
-        // Use comprehensive fallback data
+        // Comprehensive fallback
         setGasProducts(getMockGasProducts());
-        setRecentVendors(getMockVendors());
+        setRecentVendors(getMockVendors().slice(0, 4));
         
         toast.error("Using demo data - API connection failed");
         
       } finally {
         setLoading(false);
+        console.log("🏁 Dashboard data loading complete");
       }
     };
 
@@ -347,14 +422,6 @@ const Dashboard = () => {
     return currentUser.username || "User";
   };
 
-  const handleProductClick = (product: GasProduct) => {
-    navigate(`/gas-product/${product.id}`, { state: { product } });
-  };
-
-  const handleVendorClick = (vendor: Vendor) => {
-    navigate(`/vendor/${vendor.id}`);
-  };
-
   const handleSearch = () => {
     if (searchQuery.trim()) {
       navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
@@ -381,7 +448,6 @@ const Dashboard = () => {
       <header className="sticky top-0 z-40 bg-primary text-white shadow-lg">
         <div className="flex items-center justify-between p-4">
           <div className="flex items-center gap-3">
-            
             <div>
               <h1 className="text-xl font-bold">zeno</h1>
               <div className="flex items-center text-xs text-white/80">
@@ -412,7 +478,19 @@ const Dashboard = () => {
         </div>
 
         {/* Search Bar */}
-        
+        <div className="px-4 pb-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+            <Input
+              type="text"
+              placeholder="Search for services, vendors..."
+              className="pl-10 pr-4 py-2 bg-white text-foreground rounded-lg border-0 focus:ring-2 focus:ring-secondary"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+            />
+          </div>
+        </div>
       </header>
 
       {/* Service Categories */}
@@ -438,75 +516,74 @@ const Dashboard = () => {
         </div>
       </section>
 
-{/* Gas Products Section */}
-<section className="p-4">
-  <div className="flex items-center justify-between mb-4">
-    <h2 className="text-lg font-semibold">Gas Products Near You</h2>
-    <Button 
-      variant="link" 
-      className="text-secondary p-0 h-auto font-semibold"
-      onClick={() => navigate("/services/gas")}
-    >
-      View All
-    </Button>
-  </div>
-
-  {gasProducts.length === 0 ? (
-    <Card className="p-8 text-center">
-      <div className="text-6xl mb-4">🔥</div>
-      <h3 className="text-lg font-semibold mb-2">No gas products found</h3>
-      <p className="text-muted-foreground mb-4">
-        {userLocation 
-          ? "No gas products available in your area yet" 
-          : "Enable location services to see nearby products"
-        }
-      </p>
-      <Button onClick={() => navigate("/services/gas")}>
-        Browse All Gas Products
-      </Button>
-    </Card>
-  ) : (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-      {gasProducts.map((product, index) => (
-        <motion.div
-          key={product.id}
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: index * 0.05 }}
-        >
-          <Card 
-            className="p-3 cursor-pointer hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border-2 border-transparent hover:border-orange-200"
-            onClick={() => navigate(`/services/gas/${product.id}`)} // Navigate to gas listing page
+      {/* Gas Products Section */}
+      <section className="p-4">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold">Gas Products Near You</h2>
+          <Button 
+            variant="link" 
+            className="text-secondary p-0 h-auto font-semibold"
+            onClick={() => navigate("/services/gas")}
           >
-            <div className="aspect-square bg-gradient-to-br from-orange-100 to-orange-50 rounded-lg mb-2 flex items-center justify-center">
-              <span className="text-3xl">🔥</span>
-            </div>
-            <h3 className="font-medium text-sm truncate">{product.name}</h3>
-            <p className="text-xs text-muted-foreground truncate">
-              {product.cylinder_size} • {product.vendor_name}
-            </p>
-            {userLocation && product.vendor_latitude && product.vendor_longitude && (
-              <p className="text-xs text-muted-foreground mt-1">
-                {calculateDistance(
-                  userLocation[0], 
-                  userLocation[1], 
-                  product.vendor_latitude, 
-                  product.vendor_longitude
-                )}
-              </p>
-            )}
-            <div className="flex items-center justify-between mt-2">
-              <span className="text-xs font-semibold text-primary">
-                {formatPrice(product.price_with_cylinder)}
-              </span>
-            </div>
-          </Card>
-        </motion.div>
-      ))}
-    </div>
-  )}
-</section>
+            View All
+          </Button>
+        </div>
 
+        {gasProducts.length === 0 ? (
+          <Card className="p-8 text-center">
+            <div className="text-6xl mb-4">🔥</div>
+            <h3 className="text-lg font-semibold mb-2">No gas products found</h3>
+            <p className="text-muted-foreground mb-4">
+              {userLocation 
+                ? "No gas products available in your area yet" 
+                : "Enable location services to see nearby products"
+              }
+            </p>
+            <Button onClick={() => navigate("/services/gas")}>
+              Browse All Gas Products
+            </Button>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {gasProducts.map((product, index) => (
+              <motion.div
+                key={product.id}
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: index * 0.05 }}
+              >
+                <Card 
+                  className="p-3 cursor-pointer hover:shadow-lg transition-all duration-300 hover:-translate-y-1 border-2 border-transparent hover:border-orange-200"
+                  onClick={() => navigate(`/services/gas/${product.id}`)}
+                >
+                  <div className="aspect-square bg-gradient-to-br from-orange-100 to-orange-50 rounded-lg mb-2 flex items-center justify-center">
+                    <span className="text-3xl">🔥</span>
+                  </div>
+                  <h3 className="font-medium text-sm truncate">{product.name}</h3>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {product.cylinder_size} • {product.vendor_name}
+                  </p>
+                  {userLocation && product.vendor_latitude && product.vendor_longitude && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {calculateDistance(
+                        userLocation[0], 
+                        userLocation[1], 
+                        product.vendor_latitude, 
+                        product.vendor_longitude
+                      )}
+                    </p>
+                  )}
+                  <div className="flex items-center justify-between mt-2">
+                    <span className="text-xs font-semibold text-primary">
+                      {formatPrice(product.price_with_cylinder)}
+                    </span>
+                  </div>
+                </Card>
+              </motion.div>
+            ))}
+          </div>
+        )}
+      </section>
 
       {/* Recent Vendors Section */}
       <section className="p-4">
@@ -524,7 +601,13 @@ const Dashboard = () => {
         {recentVendors.length === 0 ? (
           <Card className="p-6 text-center">
             <div className="text-4xl mb-3">🏪</div>
-            <p className="text-muted-foreground">No vendors available yet</p>
+            <h3 className="text-lg font-semibold mb-2">No vendors available</h3>
+            <p className="text-muted-foreground mb-4">
+              We're working on adding more trusted vendors in your area.
+            </p>
+            <Button onClick={() => navigate("/vendors")}>
+              Browse All Vendors
+            </Button>
           </Card>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -537,7 +620,7 @@ const Dashboard = () => {
               >
                 <Card 
                   className="p-4 cursor-pointer hover:shadow-lg transition-all duration-300"
-                  onClick={() => handleVendorClick(vendor)}
+                  onClick={() => navigate(`/vendor/${vendor.id}`)}
                 >
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 bg-gradient-to-br from-blue-100 to-blue-50 rounded-lg flex items-center justify-center">
