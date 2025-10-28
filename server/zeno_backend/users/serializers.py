@@ -169,8 +169,19 @@ class UserLoginSerializer(serializers.Serializer):
         
         if phone_number and password:
             try:
-                user = User.objects.get(phone_number=phone_number)
-                user = authenticate(username=user.username, password=password)
+                print(f"Attempting login with phone: {phone_number}")  # Debug
+                
+                # Try direct authentication first
+                user = authenticate(username=phone_number, password=password)
+                print(f"Direct auth result: {user}")  # Debug
+                
+                if user is None:
+                    # Fallback: find by phone and authenticate with username
+                    user_obj = User.objects.get(phone_number=phone_number)
+                    print(f"Found user by phone: {user_obj.username}")  # Debug
+                    user = authenticate(username=user_obj.username, password=password)
+                    print(f"Username auth result: {user}")  # Debug
+                
                 if user:
                     if user.is_active:
                         data['user'] = user
@@ -178,7 +189,9 @@ class UserLoginSerializer(serializers.Serializer):
                         raise serializers.ValidationError('User account is disabled.')
                 else:
                     raise serializers.ValidationError('Unable to login with provided credentials.')
+                    
             except User.DoesNotExist:
+                print(f"No user found with phone: {phone_number}")  # Debug
                 raise serializers.ValidationError('Unable to login with provided credentials.')
         else:
             raise serializers.ValidationError('Must include phone number and password.')
