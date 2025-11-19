@@ -799,9 +799,7 @@ const containerVariants = {
               </AnimatePresence>
             </div>
 
-            {/* Other vendor fields with similar enhanced styling... */}
-            {/* Business Type, Description, Address, etc. */}
-
+            
             <div className="flex space-x-3">
               <Button 
                 type="button"
@@ -936,7 +934,7 @@ const containerVariants = {
               <CardDescription className="text-base mt-3 text-gray-600 dark:text-gray-300">
                 {isVendorType 
                   ? "Join our network of trusted service providers"
-                  : "Join thousands of users trusting ZENO services"
+                  : "Join thousands using ZENO services"
                 }
               </CardDescription>
             </motion.div>

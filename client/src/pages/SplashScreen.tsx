@@ -24,7 +24,7 @@ const SplashScreen = () => {
         <h1 className="text-6xl md:text-8xl font-bold text-white mb-4">
           ZENO
         </h1>
-        <p className="text-xl md:text-2xl text-white/90 font-medium mb-8">
+        <p className="text-xl md:text-xl text-white/90 font-medium mb-8">
           Speed You Trust, Services You Count On
         </p>
         <motion.div
