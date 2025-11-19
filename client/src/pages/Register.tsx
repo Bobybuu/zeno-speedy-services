@@ -587,7 +587,7 @@ const containerVariants = {
           )}
         </AnimatePresence>
         <p className="text-xs text-muted-foreground">
-          Include country code. This will be your login ID.
+          Include country code.
         </p>
       </div>
 
@@ -709,7 +709,7 @@ const containerVariants = {
         className="w-full h-12 bg-gradient-to-r from-secondary to-primary hover:from-secondary/90 hover:to-primary/90 text-white font-semibold text-base rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02]"
         size="lg"
       >
-        Continue to {isVendorType ? "Business Details" : "Complete Registration"}
+        {isVendorType ? "Business Details" : "Complete Registration"}
         <ChevronRight className="ml-2 h-4 w-4" />
       </Button>
     </motion.div>
