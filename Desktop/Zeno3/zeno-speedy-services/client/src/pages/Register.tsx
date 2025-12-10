@@ -4,32 +4,38 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Phone, Lock, User, ChevronRight, Shield } from "lucide-react";
+import { Mail, Phone, Lock, User, ChevronRight } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 
 const Register = () => {
   const navigate = useNavigate();
-  const { register, verifyOTP, resendOTP, requiresOTP, pendingUser } = useAuth();
+  const { register } = useAuth();
   
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
+    email: "",
     phoneNumber: "",
     password: "",
     confirmPassword: "",
     userType: "customer"
   });
 
-  const [otp, setOtp] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [otpResent, setOtpResent] = useState(false);
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validate phone number format
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      toast.error("Please enter a valid email address");
+      return;
+    }
+
+    // Phone number validation (still required but not for OTP)
     const phoneRegex = /^\+?[\d\s-()]{10,}$/;
     if (!phoneRegex.test(formData.phoneNumber)) {
       toast.error("Please enter a valid phone number with country code");
@@ -50,9 +56,8 @@ const Register = () => {
 
     try {
       const registrationData = {
-        // Email is now optional - using phone number as primary identifier
-        email: "", // Optional field
-        username: formData.phoneNumber, // Use phone number as username
+        // Email is now primary identifier
+        email: formData.email.toLowerCase().trim(),
         password: formData.password,
         password_confirm: formData.confirmPassword,
         user_type: formData.userType,
@@ -65,69 +70,31 @@ const Register = () => {
       const result = await register(registrationData);
       
       if (result.success) {
-        if (result.requiresOTP) {
-          toast.success("Registration successful! Please verify your phone number.");
-        } else {
-          toast.success("Registration successful!");
-          navigate("/dashboard");
-        }
+        toast.success("Registration successful! Please check your email for verification.");
+        // Don't navigate to dashboard yet - user needs to verify email
+        // Show verification message instead
+        navigate("/check-email", { 
+          state: { 
+            email: formData.email,
+            message: "Please check your email for verification instructions before logging in." 
+          } 
+        });
       } else {
-        // Handle specific error cases
-        if (result.error?.phone_number) {
+        // Handle specific error cases from backend
+        if (result.error?.email) {
+          toast.error(result.error.email[0]);
+        } else if (result.error?.password) {
+          toast.error(result.error.password[0]);
+        } else if (result.error?.phone_number) {
           toast.error(result.error.phone_number[0]);
-        } else if (result.error?.username) {
-          toast.error(result.error.username[0]);
+        } else if (result.error?.detail) {
+          toast.error(result.error.detail);
         } else {
           toast.error(result.error?.message || "Registration failed");
         }
       }
     } catch (error) {
-      toast.error("An unexpected error occurred");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleVerifyOTP = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (otp.length !== 6) {
-      toast.error("Please enter a valid 6-digit OTP");
-      return;
-    }
-
-    setIsLoading(true);
-
-    try {
-      const result = await verifyOTP(pendingUser?.phone_number || formData.phoneNumber, otp);
-      
-      if (result.success) {
-        toast.success("Phone number verified successfully!");
-        navigate("/dashboard");
-      } else {
-        toast.error(result.error?.message || "OTP verification failed");
-      }
-    } catch (error) {
-      toast.error("An unexpected error occurred");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleResendOTP = async () => {
-    setIsLoading(true);
-    
-    try {
-      const result = await resendOTP(pendingUser?.phone_number || formData.phoneNumber);
-      
-      if (result.success) {
-        toast.success("OTP sent successfully!");
-        setOtpResent(true);
-        setTimeout(() => setOtpResent(false), 30000); // Disable resend for 30 seconds
-      } else {
-        toast.error(result.error?.message || "Failed to resend OTP");
-      }
-    } catch (error) {
+      console.error("Registration error:", error);
       toast.error("An unexpected error occurred");
     } finally {
       setIsLoading(false);
@@ -141,92 +108,6 @@ const Register = () => {
     });
   };
 
-  // OTP Verification Form
-  if (requiresOTP && pendingUser) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-background to-muted flex items-center justify-center p-4">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="w-full max-w-md"
-        >
-          <Card className="border-0 shadow-xl">
-            <CardHeader className="space-y-1 text-center">
-              <div className="mb-4">
-                <h1 className="text-4xl font-bold text-primary">ZENO</h1>
-                <p className="text-sm text-muted-foreground">Services You Can Count On</p>
-              </div>
-              <CardTitle className="text-2xl">Verify Phone Number</CardTitle>
-              <CardDescription>
-                Enter the 6-digit OTP sent to {pendingUser.phone_number}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleVerifyOTP} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="otp">Verification Code</Label>
-                  <div className="relative">
-                    <Shield className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="otp"
-                      type="text"
-                      placeholder="123456"
-                      value={otp}
-                      onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                      className="pl-10 text-center text-lg font-mono"
-                      maxLength={6}
-                      required
-                    />
-                  </div>
-                  <p className="text-xs text-muted-foreground text-center">
-                    Enter the 6-digit code sent to your phone
-                  </p>
-                </div>
-                
-                <Button 
-                  type="submit" 
-                  className="w-full bg-secondary hover:bg-secondary/90 text-white font-semibold"
-                  size="lg"
-                  disabled={isLoading || otp.length !== 6}
-                >
-                  {isLoading ? "Verifying..." : "Verify OTP"}
-                  <ChevronRight className="ml-2 h-4 w-4" />
-                </Button>
-
-                <div className="text-center">
-                  <Button
-                    type="button"
-                    variant="link"
-                    onClick={handleResendOTP}
-                    disabled={isLoading || otpResent}
-                    className="text-secondary"
-                  >
-                    {otpResent ? "OTP Sent! Wait 30s" : "Resend OTP"}
-                  </Button>
-                </div>
-              </form>
-            </CardContent>
-            <div className="px-6 pb-6">
-              <div className="text-center text-sm w-full">
-                <span className="text-muted-foreground">Wrong number? </span>
-                <Button
-                  type="button"
-                  variant="link"
-                  onClick={() => window.location.reload()}
-                  className="text-secondary hover:underline font-semibold p-0 h-auto"
-                >
-                  Go back
-                </Button>
-              </div>
-            </div>
-          </Card>
-        </motion.div>
-      </div>
-    );
-  }
-
-  // Main Registration Form
   return (
     <div className="min-h-screen bg-gradient-to-br from-background to-muted flex items-center justify-center p-4">
       <motion.div
@@ -277,6 +158,28 @@ const Register = () => {
                 </div>
               </div>
 
+              {/* Email Field - PRIMARY IDENTIFIER */}
+              <div className="space-y-2">
+                <Label htmlFor="email">Email Address</Label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="email"
+                    name="email"
+                    type="email"
+                    placeholder="your.email@example.com"
+                    value={formData.email}
+                    onChange={handleChange}
+                    className="pl-10"
+                    required
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  This will be your login ID. We'll send verification to this email.
+                </p>
+              </div>
+
+              {/* Phone Number - REQUIRED BUT NOT FOR OTP */}
               <div className="space-y-2">
                 <Label htmlFor="phoneNumber">Phone Number</Label>
                 <div className="relative">
@@ -293,7 +196,7 @@ const Register = () => {
                   />
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Include country code. This will be your login ID.
+                  Include country code. Required for service notifications.
                 </p>
               </div>
 
@@ -354,26 +257,50 @@ const Register = () => {
                 size="lg"
                 disabled={isLoading}
               >
-                {isLoading ? "Creating Account..." : "Create Account"}
-                <ChevronRight className="ml-2 h-4 w-4" />
+                {isLoading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Creating Account...
+                  </>
+                ) : (
+                  <>
+                    Create Account
+                    <ChevronRight className="ml-2 h-4 w-4" />
+                  </>
+                )}
               </Button>
             </form>
 
-            {/* Phone Registration Info */}
-            <div className="mt-6 p-4 bg-muted/30 rounded-lg border">
-              <h4 className="text-sm font-semibold mb-2 text-center">Phone Registration</h4>
-              <div className="text-xs text-muted-foreground space-y-1">
-                <p>• Your phone number is your login ID</p>
-                <p>• OTP will be sent for verification</p>
+            {/* Email Verification Info */}
+            <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+              <h4 className="text-sm font-semibold mb-2 text-center text-blue-800">
+                Email Verification Required
+              </h4>
+              <div className="text-xs text-blue-700 space-y-1">
+                <p className="flex items-start">
+                  <span className="mr-1">•</span>
+                  <span>You'll receive a verification email after registration</span>
+                </p>
+                <p className="flex items-start">
+                  <span className="mr-1">•</span>
+                  <span>Check your inbox (and spam folder) for the verification link</span>
+                </p>
+                <p className="flex items-start">
+                  <span className="mr-1">•</span>
+                  <span>You must verify your email before logging in</span>
+                </p>
               </div>
             </div>
           </CardContent>
           <div className="px-6 pb-6">
-            <div className="text-center text-sm w-full">
+            <div className="text-center text-sm mb-4">
               <span className="text-muted-foreground">Already have an account? </span>
               <Link to="/login" className="text-secondary hover:underline font-semibold">
                 Login
               </Link>
+            </div>
+            <div className="text-center text-xs text-muted-foreground">
+              By creating an account, you agree to our Terms of Service and Privacy Policy
             </div>
           </div>
         </Card>

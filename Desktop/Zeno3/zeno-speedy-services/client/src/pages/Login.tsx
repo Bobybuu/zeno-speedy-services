@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Phone, Lock, ChevronRight } from "lucide-react";
+import { Mail, Lock, ChevronRight } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
@@ -14,7 +14,7 @@ const Login = () => {
   const { login } = useAuth();
   
   const [formData, setFormData] = useState({
-    phone_number: "",
+    email: "",
     password: ""
   });
   const [isLoading, setIsLoading] = useState(false);
@@ -22,41 +22,61 @@ const Login = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!formData.phone_number || !formData.password) {
+    if (!formData.email || !formData.password) {
       toast.error("Please fill in all fields");
       return;
     }
 
-    // Validate phone number format (basic validation)
-    const phoneRegex = /^\+?[\d\s-()]{10,}$/;
-    if (!phoneRegex.test(formData.phone_number)) {
-      toast.error("Please enter a valid phone number");
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      toast.error("Please enter a valid email address");
       return;
     }
 
     setIsLoading(true);
 
     try {
-      const result = await login(formData.phone_number, formData.password);
+      // Pass email and password to login function
+      const result = await login(formData.email, formData.password);
       
       if (result.success) {
         toast.success("Login successful!");
         navigate("/dashboard");
       } else {
-        // Handle specific error cases
-        if (result.error?.phone_number) {
-          toast.error(result.error.phone_number[0]);
+        // Handle specific error cases from backend
+        if (result.error?.email) {
+          toast.error(result.error.email[0]);
         } else if (result.error?.password) {
           toast.error(result.error.password[0]);
         } else if (result.error?.detail) {
-          toast.error(result.error.detail);
+          // Check for email verification errors
+          if (result.error.detail.includes("Email not verified") || 
+              result.error.detail.includes("email_verified")) {
+            toast.error("Email not verified. Please check your email for verification instructions.");
+            navigate("/verify-email", { 
+              state: { 
+                email: formData.email,
+                message: "Please verify your email before logging in." 
+              } 
+            });
+          } else if (result.error.detail.includes("Account is inactive")) {
+            toast.error("Account is inactive. Please contact support.");
+          } else if (result.error.detail.includes("Account is temporarily locked")) {
+            toast.error("Account is temporarily locked due to too many failed attempts. Please try again later.");
+          } else {
+            toast.error(result.error.detail);
+          }
+        } else if (result.error?.non_field_errors) {
+          // Django REST framework often uses non_field_errors
+          toast.error(result.error.non_field_errors[0]);
         } else {
-          toast.error(result.error?.message || "Login failed");
+          toast.error(result.error?.message || "Login failed. Please try again.");
         }
       }
     } catch (error) {
-      toast.error("An unexpected error occurred");
       console.error("Login error:", error);
+      toast.error("An unexpected error occurred. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -66,6 +86,14 @@ const Login = () => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value,
+    });
+  };
+
+  const handleDemoLogin = async () => {
+    // Optional: Demo login for testing
+    setFormData({
+      email: "demo@example.com",
+      password: "demo123"
     });
   };
 
@@ -85,28 +113,29 @@ const Login = () => {
             </div>
             <CardTitle className="text-2xl">Welcome back</CardTitle>
             <CardDescription>
-              Enter your phone number to access your account
+              Enter your email to access your account
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleLogin} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="phone_number">Phone Number</Label>
+                <Label htmlFor="email">Email Address</Label>
                 <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
-                    id="phone_number"
-                    name="phone_number"
-                    type="tel"
-                    placeholder="+254712345678"
-                    value={formData.phone_number}
+                    id="email"
+                    name="email"
+                    type="email"
+                    placeholder="your.email@example.com"
+                    value={formData.email}
                     onChange={handleChange}
                     className="pl-10"
                     required
+                    autoComplete="email"
                   />
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Enter your registered phone number with country code
+                  Enter your registered email address
                 </p>
               </div>
 
@@ -131,6 +160,7 @@ const Login = () => {
                     onChange={handleChange}
                     className="pl-10"
                     required
+                    autoComplete="current-password"
                   />
                 </div>
               </div>
@@ -153,9 +183,39 @@ const Login = () => {
                   </>
                 )}
               </Button>
+
+              {/* Optional: Demo login button for testing */}
+              {process.env.NODE_ENV === 'development' && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={handleDemoLogin}
+                  size="sm"
+                >
+                  Fill Demo Credentials
+                </Button>
+              )}
             </form>
 
-            
+            {/* Login Help Information */}
+            <div className="mt-6 p-4 bg-muted/30 rounded-lg border">
+              <h4 className="text-sm font-semibold mb-2 text-center">Login Help</h4>
+              <div className="text-xs text-muted-foreground space-y-1">
+                <p className="flex items-start">
+                  <span className="mr-1">•</span>
+                  <span>Use your email address to login (not phone number)</span>
+                </p>
+                <p className="flex items-start">
+                  <span className="mr-1">•</span>
+                  <span>Ensure your email is verified before logging in</span>
+                </p>
+                <p className="flex items-start">
+                  <span className="mr-1">•</span>
+                  <span>Contact support if you can't access your account</span>
+                </p>
+              </div>
+            </div>
           </CardContent>
           
           <div className="px-6 pb-6">
@@ -166,7 +226,9 @@ const Login = () => {
               </Link>
             </div>
             
-          
+            <div className="text-center text-xs text-muted-foreground">
+              <p>By logging in, you agree to our Terms of Service and Privacy Policy</p>
+            </div>
           </div>
         </Card>
       </motion.div>

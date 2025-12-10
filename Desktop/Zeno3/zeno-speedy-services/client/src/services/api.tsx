@@ -1,7 +1,7 @@
 // src/services/api.tsx
 import axios from 'axios';
 
-const API_BASE_URL = 'https://api.zenoservices.co.ke/api';
+const API_BASE_URL = 'http://localhost:8000/api/v1'; // Update with your actual backend URL
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -10,8 +10,8 @@ const api = axios.create({
 
 // Request interceptor to add auth token
 api.interceptors.request.use((config) => {
-  // Check for both temporary and permanent tokens
-  const token = localStorage.getItem('access_token') || localStorage.getItem('temp_access_token');
+  // Check for access token only (no temp tokens)
+  const token = localStorage.getItem('access_token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -46,7 +46,7 @@ api.interceptors.response.use(
       try {
         const refreshToken = localStorage.getItem('refresh_token');
         if (refreshToken) {
-          const response = await axios.post(`${API_BASE_URL}/auth/token/refresh/`, {
+          const response = await axios.post(`${API_BASE_URL}/users/auth/token/refresh/`, {
             refresh: refreshToken
           });
           
@@ -63,6 +63,8 @@ api.interceptors.response.use(
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
         localStorage.removeItem('user');
+        
+        // Remove legacy items if they exist
         localStorage.removeItem('temp_access_token');
         localStorage.removeItem('temp_refresh_token');
         localStorage.removeItem('temp_user');
@@ -84,15 +86,15 @@ api.interceptors.response.use(
   }
 );
 
-// Define types
+// ============ UPDATED TYPES FOR AUTHENTICATION ============
+
 export interface LoginData {
-  phone_number: string;
+  email: string;
   password: string;
 }
 
 export interface RegisterData {
-  email?: string;
-  username: string;
+  email: string;
   password: string;
   password_confirm: string;
   user_type: string;
@@ -102,19 +104,18 @@ export interface RegisterData {
   last_name?: string;
 }
 
-export interface VerifyOTPData {
-  phone_number: string;
-  otp: string;
+export interface VerifyEmailData {
+  email: string;
+  verification_code: string;
 }
 
-export interface ResendOTPData {
-  phone_number: string;
+export interface ResendVerificationData {
+  email: string;
 }
 
 export interface ChangePasswordData {
-  old_password: string;
-  new_password1: string;
-  new_password2: string;
+  current_password: string;
+  new_password: string;
 }
 
 export interface UpdateProfileData {
@@ -126,19 +127,16 @@ export interface UpdateProfileData {
 }
 
 export interface ForgotPasswordData {
-  phone_number: string;
-}
-
-export interface VerifyResetCodeData {
-  phone_number: string;
-  reset_code: string;
+  email: string;
 }
 
 export interface ResetPasswordData {
-  reset_token: string;
+  email: string;
+  verification_code: string;
   new_password: string;
-  confirm_password: string;
 }
+
+// ============ KEEP ALL OTHER TYPES EXACTLY AS THEY WERE ============
 
 export interface ServiceFilters {
   service_type?: string;
@@ -355,24 +353,50 @@ export interface CreateOrderData {
   special_instructions?: string;
 }
 
-// Auth API
+// ============ UPDATED AUTH API ============
+
 export const authAPI = {
-  login: (credentials: LoginData) => api.post('/auth/login/', credentials),
-  register: (userData: RegisterData) => api.post('/auth/register/', userData),
-  verifyOTP: (data: VerifyOTPData) => api.post('/auth/verify-otp/', data),
-  resendOTP: (data: ResendOTPData) => api.post('/auth/resend-otp/', data),
-  checkAuth: () => api.get('/auth/check-auth/'),
-  logout: (data?: any) => api.post('/auth/logout/', data),
-  getProfile: () => api.get('/auth/profile/'),
-  updateProfile: (data: UpdateProfileData) => api.put('/auth/update-profile/', data),
-  changePassword: (data: ChangePasswordData) => api.post('/auth/change-password/', data),
-  refreshToken: (refresh: string) => api.post('/auth/token/refresh/', { refresh }),
-  forgotPassword: (phone_number: string) => api.post('/auth/forgot-password/', { phone_number }),
-  verifyResetCode: (data: VerifyResetCodeData) => api.post('/auth/verify-reset-code/', data),
-  resetPassword: (data: ResetPasswordData) => api.post('/auth/reset-password/', data),
+  // Authentication - UPDATED ENDPOINTS
+  login: (credentials: LoginData) => api.post('/users/auth/login/', credentials),
+  register: (userData: RegisterData) => api.post('/users/auth/register/', userData),
+  
+  // Email verification - NEW ENDPOINTS
+  verifyEmail: (data: VerifyEmailData) => api.post('/users/auth/verify-email/', data),
+  resendVerification: (data: ResendVerificationData) => api.post('/users/auth/resend-verification/', data),
+  
+  // Session & Profile - UPDATED ENDPOINTS
+  checkAuth: () => api.get('/users/me/'),
+  logout: (data?: any) => api.post('/users/auth/logout/', data),
+  getProfile: () => api.get('/users/me/'),
+  updateProfile: (data: UpdateProfileData) => {
+    const formData = new FormData();
+    if (data.first_name) formData.append('first_name', data.first_name);
+    if (data.last_name) formData.append('last_name', data.last_name);
+    if (data.phone_number) formData.append('phone_number', data.phone_number);
+    if (data.location) formData.append('location', data.location);
+    if (data.profile_picture) formData.append('profile_picture', data.profile_picture);
+    
+    return api.put('/users/me/update/', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+  },
+  
+  // Password management - UPDATED ENDPOINTS
+  changePassword: (data: ChangePasswordData) => api.post('/users/auth/password/change/', data),
+  forgotPassword: (data: ForgotPasswordData) => api.post('/users/auth/password/reset/', data),
+  resetPassword: (data: ResetPasswordData) => api.post('/users/auth/password/reset/confirm/', data),
+  
+  // Token refresh - UPDATED ENDPOINT
+  refreshToken: (refresh: string) => api.post('/users/auth/token/refresh/', { refresh }),
+  
+  // REMOVED: OTP endpoints
+  // verifyOTP: (data: VerifyOTPData) => api.post('/auth/verify-otp/', data), - REMOVED
+  // resendOTP: (data: ResendOTPData) => api.post('/auth/resend-otp/', data), - REMOVED
+  // verifyResetCode: (data: VerifyResetCodeData) => api.post('/auth/verify-reset-code/', data), - REMOVED
 };
 
-// Services API
+// ============ SERVICES API - KEEP EXACTLY AS IT WAS ============
+
 export const servicesAPI = {
   getServices: (filters?: ServiceFilters) => api.get('/services/', { params: filters }),
   getService: (id: number) => api.get(`/services/${id}/`),
@@ -381,7 +405,8 @@ export const servicesAPI = {
   deleteService: (id: number) => api.delete(`/services/${id}/`),
 };
 
-// Vendors API
+// ============ VENDORS API - KEEP EXACTLY AS IT WAS ============
+
 export const vendorsAPI = {
   // Vendor management
   getVendors: (filters?: VendorFilters) => api.get('/vendors/vendors/', { params: filters }),
@@ -413,7 +438,8 @@ export const vendorsAPI = {
   deleteOperatingHours: (id: number) => api.delete(`/vendors/operating-hours/${id}/`),
 };
 
-// Gas Products API
+// ============ GAS PRODUCTS API - KEEP EXACTLY AS IT WAS ============
+
 export const gasProductsAPI = {
   // Product management
   getGasProducts: (filters?: GasProductFilters) => api.get('/vendors/gas-products/', { params: filters }),
@@ -457,7 +483,8 @@ export const gasProductsAPI = {
   setPrimaryImage: (imageId: number) => api.post(`/vendors/product-images/${imageId}/set_primary/`),
 };
 
-// Orders API
+// ============ ORDERS API - KEEP EXACTLY AS IT WAS ============
+
 export const ordersAPI = {
   getOrders: (filters?: OrderFilters) => api.get('/orders/', { params: filters }),
   getOrder: (id: number) => api.get(`/orders/${id}/`),
@@ -474,7 +501,8 @@ export const ordersAPI = {
     api.patch(`/orders/${orderId}/update_status/`, { status }),
 };
 
-// Payments API
+// ============ PAYMENTS API - KEEP EXACTLY AS IT WAS ============
+
 export const paymentsAPI = {
   createPayment: (data: any) => api.post('/payments/', data),
   getPayment: (id: number) => api.get(`/payments/${id}/`),
@@ -485,7 +513,8 @@ export const paymentsAPI = {
     api.post('/payments/create_order_payment/', { order: orderId, payment_method: paymentMethod }),
 };
 
-// ✅ UPDATED: Cart API with proper localStorage array handling
+// ============ CART API - KEEP EXACTLY AS IT WAS ============
+
 export const cartAPI = {
   // Get user's cart from backend
   getCart: async () => {
@@ -521,40 +550,40 @@ export const cartAPI = {
 
   // Add gas product to cart
   addGasProduct: async (productId: number, quantity: number = 1) => {
-  try {
-    const token = localStorage.getItem('access_token');
-    if (token) {
-      console.log('🛒 Adding to backend cart:', { productId, quantity });
-      const response = await api.post('/orders/cart/add_gas_product/', {
-        product_id: productId,
-        quantity: quantity
-      });
-      console.log('🛒 Backend add to cart response:', response.data);
-      return response.data;
-    } else {
-      console.log('🛒 Adding to localStorage cart:', { productId, quantity });
-      const result = cartAPI.addToLocalStorage(productId, quantity);
-      console.log('🛒 localStorage cart after add:', result);
-      return result;
+    try {
+      const token = localStorage.getItem('access_token');
+      if (token) {
+        console.log('🛒 Adding to backend cart:', { productId, quantity });
+        const response = await api.post('/orders/cart/add_gas_product/', {
+          product_id: productId,
+          quantity: quantity
+        });
+        console.log('🛒 Backend add to cart response:', response.data);
+        return response.data;
+      } else {
+        console.log('🛒 Adding to localStorage cart:', { productId, quantity });
+        const result = cartAPI.addToLocalStorage(productId, quantity);
+        console.log('🛒 localStorage cart after add:', result);
+        return result;
+      }
+    } catch (error: any) {
+      console.error('Error adding to cart:', error);
+      
+      if (error.response?.status === 401) {
+        throw new Error('Please log in to add items to cart');
+      } else if (error.code === 'ECONNABORTED' || !error.response) {
+        console.log('🛒 Backend timeout, using localStorage fallback');
+        const result = cartAPI.addToLocalStorage(productId, quantity);
+        console.log('🛒 localStorage cart after fallback:', result);
+        return result;
+      } else {
+        console.log('🛒 Other error, using localStorage fallback');
+        const result = cartAPI.addToLocalStorage(productId, quantity);
+        console.log('🛒 localStorage cart after error fallback:', result);
+        return result;
+      }
     }
-  } catch (error: any) {
-    console.error('Error adding to cart:', error);
-    
-    if (error.response?.status === 401) {
-      throw new Error('Please log in to add items to cart');
-    } else if (error.code === 'ECONNABORTED' || !error.response) {
-      console.log('🛒 Backend timeout, using localStorage fallback');
-      const result = cartAPI.addToLocalStorage(productId, quantity);
-      console.log('🛒 localStorage cart after fallback:', result);
-      return result;
-    } else {
-      console.log('🛒 Other error, using localStorage fallback');
-      const result = cartAPI.addToLocalStorage(productId, quantity);
-      console.log('🛒 localStorage cart after error fallback:', result);
-      return result;
-    }
-  }
-},
+  },
 
   // Update item quantity
   updateQuantity: async (itemId: number, quantity: number) => {
@@ -769,7 +798,8 @@ export const cartAPI = {
   }
 };
 
-// Utility functions
+// ============ UTILITY FUNCTIONS - UPDATED ============
+
 export const isAuthenticated = (): boolean => {
   return !!localStorage.getItem('access_token');
 };
@@ -782,12 +812,15 @@ export const clearAuthData = (): void => {
   localStorage.removeItem('access_token');
   localStorage.removeItem('refresh_token');
   localStorage.removeItem('user');
+  // Also clear any pending verification data
+  localStorage.removeItem('pending_user_email');
+  // Remove legacy items if they exist
   localStorage.removeItem('temp_access_token');
   localStorage.removeItem('temp_refresh_token');
   localStorage.removeItem('temp_user');
 };
 
-// Helper function for file uploads
+// Helper function for file uploads - KEEP AS WAS
 export const uploadFile = (file: File, uploadUrl: string, onProgress?: (progress: number) => void) => {
   const formData = new FormData();
   formData.append('file', file);
@@ -803,11 +836,13 @@ export const uploadFile = (file: File, uploadUrl: string, onProgress?: (progress
   });
 };
 
+// Health API - UPDATED ENDPOINT
 export const healthAPI = {
-  checkBackendHealth: () => api.get('/health/'),
+  checkBackendHealth: () => api.get('/users/health/'),
   checkCartHealth: () => api.get('/orders/cart/health/', { timeout: 5000 })
 };
 
+// Safe Gas Products API - KEEP EXACTLY AS WAS
 export const safeGasProductsAPI = {
   getGasProducts: async (filters?: GasProductFilters) => {
     try {
